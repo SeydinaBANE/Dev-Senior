@@ -8,23 +8,40 @@
 
 Le Business Manager est ton assistant IA personnel pour le marketing, le contenu, le SEO et les tâches business du quotidien. Tu lui parles en français, il fait le reste.
 
+Il partage aussi sa mémoire avec l'agent Dev Senior : les informations importantes que tu lui communiques peuvent enrichir automatiquement le contexte de l'équipe technique.
+
 ---
 
 ## Comment l'utiliser
 
 ### Option 1 — Interface web (recommandé)
 
-1. Ouvre **http://localhost:5173**
+1. Ouvre **http://localhost:5173** (ou http://localhost:8080/app en prod)
 2. Sélectionne **Business Manager** dans la barre latérale
 3. Tape ton message et appuie sur Entrée
 
-### Option 2 — Via l'interface n8n (workflows automatiques)
+### Option 2 — Slack (accès depuis le chat d'équipe)
+
+Dans n'importe quel canal Slack où le bot est présent :
+```
+/biz-manager Rédige 3 posts LinkedIn sur notre nouvelle offre SEO
+```
+→ La réponse arrive dans le canal en quelques secondes.
+
+### Option 3 — Microsoft Teams
+
+Mentionne le bot dans un canal Teams :
+```
+@biz-manager Analyse ce lead et propose un email de suivi
+```
+
+### Option 4 — Via l'interface n8n (workflows automatiques)
 
 1. Ouvre http://localhost:5678
 2. Connexion : `admin` / le mot de passe fourni par l'équipe technique
 3. Les workflows sont déjà prêts — active ceux dont tu as besoin
 
-### Option 3 — En ligne de commande (pour les habitués du terminal)
+### Option 5 — En ligne de commande (pour les habitués du terminal)
 
 ```bash
 make biz-manager
@@ -112,6 +129,15 @@ Pour activer un workflow :
 
 ---
 
+## Dashboard métriques
+
+L'équipe technique peut consulter l'onglet **Dashboard** de l'interface web pour voir la santé des agents :
+- Temps de réponse moyen
+- Taux d'erreur
+- Score de qualité des réponses (mis à jour chaque nuit automatiquement)
+
+---
+
 ## Bonnes pratiques
 
 **Donne du contexte.** Plus tu précises le contexte (audience, objectif, ton), meilleure est la réponse.
@@ -141,6 +167,12 @@ Toi > [après avoir demandé un email] Raccourcis-le et mets le CTA en premier
 
 **L'interface web ne s'ouvre pas**
 → Contacter l'équipe technique pour qu'elle lance `make api` et `make frontend`.
+
+**Le slash command Slack ne répond pas**
+→ Vérifier auprès de l'équipe technique que `SLACK_SIGNING_SECRET` est configuré et que la Slack App est active.
+
+**Le bot Teams ne répond pas**
+→ Vérifier que le webhook sortant Teams est actif et que `TEAMS_WEBHOOK_KEY` est configuré.
 
 **L'agent ne répond plus**
 → Attends 30 secondes. Si ça persiste, appelle l'équipe technique.

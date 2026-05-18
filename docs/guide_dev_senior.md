@@ -8,6 +8,8 @@
 
 Dev Senior est un agent IA qui connaît votre codebase et agit comme un membre permanent de l'équipe. Il peut faire des code reviews, débugger, proposer des architectures, et rédiger de la documentation — en gardant le contexte de la conversation.
 
+Il partage aussi une mémoire commune avec le Business Manager : les décisions métier importantes prises avec lui sont automatiquement disponibles dans son contexte.
+
 ---
 
 ## Démarrage rapide
@@ -19,11 +21,20 @@ make api           # démarre l'API (port 8080)
 make frontend      # démarre le frontend → http://localhost:5173
 ```
 
+Sélectionner **Dev Senior** dans la barre latérale.
+
 **Option 2 — Terminal**
 
 ```bash
 make dev-senior
 ```
+
+**Option 3 — Slack**
+
+```
+/dev-senior Explique-moi comment fonctionne api/sessions.py
+```
+→ Réponse postée dans le canal dans les quelques secondes.
 
 ---
 
@@ -60,9 +71,25 @@ Toi > Rédige la docstring de la fonction retrieve_context dans memory/dev_senio
 
 ---
 
+## Dashboard métriques
+
+L'onglet **Dashboard** du frontend affiche en temps réel :
+- Latence P50 et P95 par agent
+- Taux d'erreur
+- Scores de qualité LLM-as-judge (note sur 10)
+
+Ou directement via l'API :
+```bash
+curl http://localhost:8080/metrics -H "X-API-Key: votre-cle"
+```
+
+---
+
 ## Fonctionnement de la mémoire
 
-L'agent **cherche automatiquement** dans la codebase indexée avant de répondre. Pour que ça fonctionne :
+L'agent **cherche automatiquement** dans la codebase indexée + le contexte partagé avec le Biz Manager avant de répondre.
+
+Pour que ça fonctionne :
 
 ```bash
 # Indexer le projet (à refaire après des changements majeurs)
@@ -73,6 +100,12 @@ make index-codebase-force
 ```
 
 La mémoire est stockée dans Qdrant (dashboard : http://localhost:6333/dashboard) — elle persiste entre les sessions.
+
+**Collections Qdrant :**
+| Collection | Contenu |
+|---|---|
+| `codebase` | Fichiers du projet indexés par Dev Senior |
+| `shared` | Contexte partagé entre Dev Senior et Business Manager |
 
 ---
 
@@ -123,8 +156,14 @@ make healthcheck
 # Voir les traces dans Langfuse
 # → https://cloud.langfuse.com (ou LANGFUSE_HOST si self-hosted)
 
-# Évaluation qualité
-make eval-quality ARGS="--agent dev-senior --samples-file tests/samples/dev_senior.json"
+# Évaluation qualité manuelle
+make eval-quality
+
+# Détecter une dérive de comportement
+make eval-drift
+
+# Le cron tourne automatiquement chaque nuit à 2h si installé
+make install-eval-cron
 ```
 
 ---
@@ -145,3 +184,6 @@ make eval-quality ARGS="--agent dev-senior --samples-file tests/samples/dev_seni
 
 **Erreur MCP GitHub**
 → Vérifier que `GITHUB_TOKEN` est dans `.env` avec les bons scopes (`repo`).
+
+**Slash command Slack ne répond pas**
+→ Vérifier que `SLACK_SIGNING_SECRET` est défini et correspond à celui de la Slack App.
