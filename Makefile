@@ -88,7 +88,7 @@ docker-down:
 docker-logs:
 	docker compose -f infra/docker/docker-compose.yml logs -f
 
-# ── Agents ───────────────────────────────────────────────────────────────────
+# ── Agents (terminal) ────────────────────────────────────────────────────────
 
 dev-senior:
 	$(VENV)/bin/python -m agents.dev_senior

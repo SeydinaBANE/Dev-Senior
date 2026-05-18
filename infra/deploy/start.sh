@@ -19,40 +19,31 @@ fail() { echo -e "${RED}[fail]${NC}  $1"; exit 1; }
 
 mkdir -p "$LOG_DIR"
 
-# ── 1. Docker (Ollama + ChromaDB + n8n) ──────────────────────────────────────
+# ── 1. Docker (Qdrant + PostgreSQL + n8n) ─────────────────────────────────────
 log "Démarrage des containers Docker..."
 docker compose -f "$PROJECT_DIR/infra/docker/docker-compose.yml" up -d
 
-# ── 2. Attendre Ollama ────────────────────────────────────────────────────────
-log "Attente d'Ollama..."
+# ── 2. Attendre Qdrant ────────────────────────────────────────────────────────
+log "Attente de Qdrant..."
 TRIES=0
-until curl -s http://localhost:11434/api/tags > /dev/null 2>&1; do
-    sleep 3
-    TRIES=$((TRIES + 1))
-    [[ $TRIES -ge 20 ]] && fail "Ollama ne répond pas après 60s"
-done
-log "Ollama prêt."
-
-# ── 3. Vérifier les modèles ───────────────────────────────────────────────────
-MODELS=("qwen2.5-coder:7b" "llama3.1:8b" "nomic-embed-text")
-for model in "${MODELS[@]}"; do
-    if ! docker exec ollama ollama list 2>/dev/null | grep -q "$model"; then
-        warn "Modèle manquant : $model — téléchargement..."
-        docker exec ollama ollama pull "$model"
-    fi
-done
-log "Modèles OK."
-
-# ── 4. Attendre ChromaDB ──────────────────────────────────────────────────────
-log "Attente de ChromaDB..."
-TRIES=0
-until curl -s http://localhost:8000/api/v1/heartbeat > /dev/null 2>&1; do
+until curl -sf http://localhost:6333/healthz > /dev/null 2>&1; do
     sleep 2
     TRIES=$((TRIES + 1))
-    [[ $TRIES -ge 15 ]] && warn "ChromaDB lent à démarrer, on continue..."  && break
+    [[ $TRIES -ge 20 ]] && fail "Qdrant ne répond pas après 40s"
 done
+log "Qdrant prêt."
 
-# ── 5. API agents ─────────────────────────────────────────────────────────────
+# ── 3. Attendre PostgreSQL ────────────────────────────────────────────────────
+log "Attente de PostgreSQL..."
+TRIES=0
+until docker exec postgres pg_isready -U "${POSTGRES_USER:-agents}" -d "${POSTGRES_DB:-agents_db}" > /dev/null 2>&1; do
+    sleep 2
+    TRIES=$((TRIES + 1))
+    [[ $TRIES -ge 20 ]] && fail "PostgreSQL ne répond pas après 40s"
+done
+log "PostgreSQL prêt."
+
+# ── 4. API agents ─────────────────────────────────────────────────────────────
 log "Démarrage de l'API agents..."
 PLIST="$HOME/Library/LaunchAgents/com.agents.api.plist"
 if [[ -f "$PLIST" ]]; then
@@ -69,6 +60,6 @@ else
     log "API démarrée (PID: $(cat "$LOG_DIR/api.pid"))."
 fi
 
-# ── 6. Health check final ─────────────────────────────────────────────────────
+# ── 5. Health check final ─────────────────────────────────────────────────────
 sleep 4
 bash "$PROJECT_DIR/infra/deploy/healthcheck.sh"

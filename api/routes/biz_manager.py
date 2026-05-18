@@ -5,6 +5,7 @@ from pydantic_ai.messages import ModelMessagesTypeAdapter
 
 from agents.biz_manager.agent import agent
 from memory.biz_manager.context import retrieve_context, save_interaction
+from observability.langfuse_config import get_langfuse
 from api.auth import require_api_key
 from api.db import get_pool
 from api.sessions import new_session, get_history, set_history, delete_session
@@ -43,8 +44,22 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     memory_context = retrieve_context(req.message)
     prompt = f"{memory_context}\n\n{req.message}" if memory_context else req.message
 
+    lf = get_langfuse()
+    trace = lf.trace(
+        name="biz-manager-chat",
+        session_id=session_id,
+        input={"message": req.message},
+        metadata={"agent": "biz-manager"},
+    ) if lf else None
+
     result = await agent.run(prompt, message_history=history)
     response = result.data
+
+    if trace:
+        try:
+            trace.update(output={"response": response})
+        except Exception:
+            pass
 
     messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
     await set_history(pool, session_id, messages)
@@ -56,10 +71,25 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 @router.post("/task", response_model=TaskResponse, dependencies=[Depends(require_api_key)])
 async def run_task(req: TaskRequest) -> TaskResponse:
     """Exécution one-shot pour les workflows n8n (sans historique de session)."""
+    lf = get_langfuse()
+    trace = lf.trace(
+        name="biz-manager-task",
+        input={"task": req.task},
+        metadata={"agent": "biz-manager", "type": "one-shot"},
+    ) if lf else None
+
     prompt = f"{req.context}\n\n{req.task}" if req.context else req.task
     result = await agent.run(prompt)
-    save_interaction(req.task, result.data)
-    return TaskResponse(result=result.data)
+    response = result.data
+
+    if trace:
+        try:
+            trace.update(output={"result": response})
+        except Exception:
+            pass
+
+    save_interaction(req.task, response)
+    return TaskResponse(result=response)
 
 
 @router.post("/reset/{session_id}", dependencies=[Depends(require_api_key)])

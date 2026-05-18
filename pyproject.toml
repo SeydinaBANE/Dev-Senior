@@ -26,7 +26,7 @@ dependencies = [
     # Sessions persistantes
     "asyncpg>=0.29.0",
     # Observabilité
-    "logfire[fastapi,httpx]>=0.50.0",
+    "langfuse>=2.0.0",
     # API HTTP (pour n8n)
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",

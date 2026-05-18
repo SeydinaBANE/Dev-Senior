@@ -5,6 +5,11 @@
 .venv/
 venv/
 
+# Frontend — variables d'environnement locales (contiennent VITE_API_KEY)
+frontend/.env.local
+frontend/.env.*.local
+frontend/dist/
+
 # Python
 __pycache__/
 *.py[cod]

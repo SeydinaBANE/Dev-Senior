@@ -91,7 +91,7 @@ make healthcheck
 | Intégrations | MCP (serveurs custom) |
 | Mémoire vectorielle | Qdrant (Docker) |
 | Sessions persistantes | PostgreSQL + asyncpg |
-| Observabilité | Logfire |
+| Observabilité | Langfuse (traces + scores) |
 | API interne | FastAPI + uvicorn |
 | Frontend | React 18 + Vite + TypeScript + Tailwind |
 | Automatisation | n8n (Docker) |
@@ -153,6 +153,7 @@ make logs               # logs de l'API en temps réel
 4. **PostgreSQL** : changer `POSTGRES_PASSWORD`
 5. **Google credentials** : `credentials.json` et `token.json` sont dans `.gitignore` — ne jamais les committer
 6. **Swagger** : désactiver en prod avec `DOCS_ENABLED=false`
+7. **Frontend** : `VITE_API_KEY` dans `frontend/.env.local` pour passer la clé API au frontend en prod
 
 ### Générer une clé API sécurisée
 
@@ -182,7 +183,7 @@ cp .env.example .env
 make setup              # installe Python deps
 make docker-up          # démarre Qdrant + PostgreSQL + n8n
 make healthcheck        # vérifie que tout est OK
-make frontend-install   # installe les deps npm
+make frontend-install   # installe les deps npm (Node 20+ requis)
 ```
 
 ### Démarrage au boot (Mac mini M4)
@@ -226,7 +227,7 @@ Dev-Senior/
 │   ├── embeddings.py       ← OpenRouter text-embedding-3-small
 │   └── store.py            ← Client Qdrant
 ├── observability/          ← Tracing et évaluations
-│   ├── logfire_config.py   ← Configuration Logfire
+│   ├── langfuse_config.py  ← Configuration Langfuse (tracing + scores)
 │   └── evals/              ← Eval qualité + détection dérive
 ├── frontend/               ← React + Vite + TypeScript + Tailwind
 │   ├── src/
