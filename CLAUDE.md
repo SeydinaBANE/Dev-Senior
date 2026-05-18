@@ -12,15 +12,50 @@ Ce dépôt contient deux agents IA internes déployés sur Mac mini M4 :
 ## Structure critique
 
 ```
-agents/          ← Pydantic AI agents (modèle, prompt, mémoire)
-mcp_servers/     ← Serveurs MCP (GitHub, Google WS, CRM, SEO)
-api/             ← FastAPI : auth.py, db.py (asyncpg), main.py, routes/, sessions.py
-memory/          ← Qdrant : embeddings (OpenRouter), indexer, retriever
+agents/
+  dev_senior/    ← agent.py, prompts.py, __main__.py
+  biz_manager/   ← agent.py, prompts.py, __main__.py
+
+mcp_servers/
+  github/        ← accès repo, issues, PRs
+  google_workspace/ ← Gmail, Calendar, Drive
+  crm/           ← HubSpot
+  seo/           ← outils SEO
+
+api/             ← FastAPI : auth.py, db.py (asyncpg), main.py, sessions.py
+  routes/        ← biz_manager.py, dev_senior.py (endpoints par agent)
+
+memory/          ← couche mémoire vectorielle
+  embeddings.py  ← génération embeddings via OpenRouter
+  store.py       ← interface Qdrant
+  dev_senior/    ← indexer.py, retriever.py (RAG codebase)
+  biz_manager/   ← context.py (mémoire interactions)
+  vector_store/  ← données Qdrant locales (ne pas committer)
+
 observability/   ← langfuse_config.py, evals/ (qualité + dérive)
-workflows/n8n/   ← 5 JSONs importables (tous avec header X-API-Key)
+
+workflows/
+  n8n/           ← 5 JSONs importables (tous avec header X-API-Key)
+
 frontend/        ← React + Vite + TypeScript + Tailwind (port 5173)
-infra/docker/    ← docker-compose (Qdrant + PostgreSQL + n8n)
-infra/deploy/    ← start/stop/healthcheck/launchd + init.sql
+  src/
+    api/         ← clients fetch vers l'API
+    components/  ← composants React
+    hooks/       ← hooks personnalisés
+
+infra/
+  docker/        ← docker-compose (Qdrant + PostgreSQL + n8n)
+  deploy/        ← start/stop/healthcheck/launchd + init.sql
+  ollama/        ← vestige pre-migration (ne plus utiliser, stack = OpenRouter)
+
+tests/
+  agents/        ← test_smoke.py (TestModel Pydantic AI, pas d'appel réseau)
+  mcp_servers/   ← test_github.py
+
+docs/            ← guide_dev_senior.md, guide_biz_manager.md
+
+.github/
+  workflows/     ← ci.yml (lint + tests), deploy.yml (déploiement)
 ```
 
 ## Commandes essentielles
