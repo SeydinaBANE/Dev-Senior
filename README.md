@@ -105,8 +105,9 @@ make healthcheck
 | Sessions | Redis (TTL natif) ou PostgreSQL + asyncpg (fallback automatique) |
 | Observabilité | Langfuse (traces + LLM-as-judge + dérive) |
 | Dashboard métriques | FastAPI `/metrics` + composant React (P50/P95, taux d'erreur, qualité) |
-| API interne | FastAPI + uvicorn — réponses complètes (`/chat`) et streaming SSE (`/chat/stream`) |
-| Frontend | React 18 + Vite + TypeScript + Tailwind — streaming token-par-token, servi en prod via FastAPI `/app` |
+| API interne | FastAPI + uvicorn — réponses complètes (`/chat`), streaming SSE (`/chat/stream`), upload de fichiers (`/upload`) |
+| Frontend | React 18 + Vite + TypeScript + Tailwind — streaming token-par-token, upload de fichiers, servi en prod via FastAPI `/app` ou Vercel |
+| Extraction de fichiers | `pypdf` (PDF) + `python-docx` (DOCX) + texte/code natif — 20 000 chars max |
 | Chat d'équipe | Slack slash commands · Teams outgoing webhook |
 | Automatisation | n8n — 5 workflows prêts à l'emploi |
 | Infra | Docker Compose, GitHub Actions CI/CD, launchd (macOS) |
@@ -162,6 +163,18 @@ Deux modes coexistent sur l'API :
 |---|---|---|
 | `POST /dev-senior/chat` | Réponse complète (JSON) | n8n, intégrations tierces |
 | `POST /dev-senior/chat/stream` | SSE token-par-token | Frontend, Slack (background) |
+
+### Upload de fichiers
+Joindre un fichier à n'importe quel message via le bouton 📎 dans le frontend.
+
+- **Formats supportés** : texte/code (`.py`, `.ts`, `.md`, `.json`, `.csv`, `.yaml`…), `.pdf`, `.docx`
+- **Taille max extraite** : 20 000 caractères (tronqué avec notice si dépassé)
+- **Fonctionnement** : le serveur extrait le texte via `POST /{agent}/upload`, le renvoie au client. Lors de l'envoi du message, le texte est inclus dans `document_context` → injecté dans le prompt sous la section `[Document joint]`. Aucun stockage serveur.
+
+```http
+POST /dev-senior/upload          → { filename, text, size_chars }
+POST /dev-senior/chat            ← { message, session_id, document_context? }
+```
 
 ### Évaluation automatique quotidienne
 Un job launchd (`make install-eval-cron`) tourne chaque nuit à 2h :
@@ -315,9 +328,10 @@ Dev-Senior/
 │   ├── main.py             ← App + CORS + lifespan (MCP + sessions)
 │   ├── sessions.py         ← SessionStore abstrait (Redis ou PostgreSQL)
 │   ├── metrics_store.py    ← métriques in-memory (P50/P95, erreurs)
+│   ├── file_extractor.py   ← extraction texte (txt/code, PDF, DOCX) — 20k chars max
 │   └── routes/
-│       ├── dev_senior.py   ← POST /dev-senior/chat|reset|health
-│       ├── biz_manager.py  ← POST /biz-manager/chat|task|reset|health
+│       ├── dev_senior.py   ← POST /dev-senior/chat|stream|upload|reset|health
+│       ├── biz_manager.py  ← POST /biz-manager/chat|stream|upload|task|reset|health
 │       ├── metrics.py      ← GET /metrics (latence + qualité)
 │       ├── slack.py        ← POST /slack/command (slash commands)
 │       └── teams.py        ← POST /teams/message (outgoing webhook)
@@ -335,17 +349,18 @@ Dev-Senior/
 │       └── cron_eval.py    ← orchestrateur d'évaluation quotidienne
 ├── frontend/
 │   ├── .env.example        ← template VITE_API_KEY + VITE_API_URL
+│   ├── vercel.json         ← règle rewrite SPA pour Vercel
 │   ├── src/
 │   │   ├── App.tsx         ← layout Sidebar + vue active (chat ou dashboard)
-│   │   ├── api/agents.ts   ← fetch API (VITE_API_KEY + VITE_API_URL)
-│   │   ├── hooks/useChat.ts
+│   │   ├── api/agents.ts   ← fetch API (VITE_API_KEY + VITE_API_URL + uploadFile)
+│   │   ├── hooks/useChat.ts ← pendingDoc, attachFile, detachFile, uploading
 │   │   └── components/
 │   │       ├── Sidebar.tsx         ← sélecteur agent + nav dashboard
 │   │       ├── ChatWindow.tsx
-│   │       ├── MessageBubble.tsx
-│   │       ├── InputBar.tsx
+│   │       ├── MessageBubble.tsx   ← chip 📎 si fichier joint
+│   │       ├── InputBar.tsx        ← bouton trombone + chip fichier
 │   │       └── MetricsDashboard.tsx ← P50/P95, taux d'erreur, qualité
-│   └── vite.config.ts      ← base /app/ en prod, proxy en dev
+│   └── vite.config.ts      ← base pilotable via VITE_BASE_PATH (/app/ self-hosted, / Vercel)
 ├── workflows/n8n/          ← 5 workflows JSON (PR Review, SEO, Email, Lead, Contenu)
 ├── infra/
 │   ├── docker/             ← docker-compose (Qdrant + PostgreSQL + Redis + n8n)
@@ -355,11 +370,13 @@ Dev-Senior/
 │   ├── mcp_servers/        ← test_github.py, test_crm.py, test_seo.py, test_google_workspace.py
 │   ├── memory/             ← test_shared.py
 │   ├── observability/      ← test_evals.py
-│   └── api/                ← test_sessions.py, test_slack.py, test_teams.py
+│   └── api/                ← test_sessions.py, test_slack.py, test_teams.py, test_upload.py
 ├── docs/
 │   ├── guide_dev_senior.md
-│   └── guide_biz_manager.md
+│   ├── guide_biz_manager.md
+│   └── deploy_railway_vercel.md ← déploiement cloud Railway + Vercel
 ├── .github/workflows/      ← ci.yml + deploy.yml
+├── railway.toml            ← config déploiement Railway (Nixpacks)
 ├── CLAUDE.md               ← instructions Claude Code
 ├── Makefile
 └── pyproject.toml
