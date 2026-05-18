@@ -7,7 +7,7 @@ Ce dépôt contient deux agents IA internes déployés sur Mac mini M4 :
 - **Dev Senior** (`agents/dev_senior/`) : assistant technique permanent. Connaît la codebase via RAG (Qdrant). Accès GitHub via MCP.
 - **Business Manager** (`agents/biz_manager/`) : assistant non-technique. Accès Google Workspace, CRM HubSpot, SEO via MCP. Mémoire des interactions.
 
-**Stack** : Pydantic AI · OpenRouter · Qdrant · PostgreSQL · FastAPI · React (Vite) · n8n · Logfire · MCP custom
+**Stack** : Pydantic AI · OpenRouter · Qdrant · PostgreSQL · FastAPI · React (Vite) · n8n · Langfuse · MCP custom
 
 ## Structure critique
 
@@ -83,6 +83,9 @@ make install-service    # installer le service launchd (démarrage au boot)
 | `GITHUB_TOKEN` | MCP GitHub (scopes: `repo`) |
 | `GOOGLE_CREDENTIALS_FILE` | OAuth Google Workspace |
 | `CRM_API_KEY` | HubSpot Private App Token |
+| `LANGFUSE_PUBLIC_KEY` | Clé publique Langfuse (tracing) |
+| `LANGFUSE_SECRET_KEY` | Clé secrète Langfuse |
+| `LANGFUSE_HOST` | URL Langfuse (défaut : cloud.langfuse.com) |
 | `DOCS_ENABLED=false` | Désactiver Swagger en prod |
 
 ## Décisions architecturales
@@ -94,3 +97,4 @@ make install-service    # installer le service launchd (démarrage au boot)
 - **MCPServerStdio** : MCP servers démarrés une fois au lancement via `agent.run_mcp_servers()`
 - **React + Vite** : frontend découplé, dev proxy vers l'API sur :8080, build statique pour la prod
 - **Vite proxy** : `/dev-senior` et `/biz-manager` proxifiés vers `http://localhost:8080` en dev
+- **Langfuse** : chaque appel agent crée un `trace` (input/output). Scores LLM-as-judge via `eval_quality.py`. Dashboard sur `cloud.langfuse.com`

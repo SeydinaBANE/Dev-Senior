@@ -19,11 +19,10 @@ import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-import logfire
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from observability.logfire_config import configure_logfire
+from observability.langfuse_config import configure_observability, flush as langfuse_flush
 from agents.dev_senior.agent import agent as dev_agent
 from agents.biz_manager.agent import agent as biz_agent
 from api.db import create_pool
@@ -33,12 +32,13 @@ from api.routes.biz_manager import router as biz_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    configure_logfire("agents-api")
+    configure_observability("agents-api")
     app.state.pool = await create_pool()
     async with dev_agent.run_mcp_servers():
         async with biz_agent.run_mcp_servers():
             yield
     await app.state.pool.close()
+    langfuse_flush()
 
 
 app = FastAPI(
@@ -62,8 +62,6 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-
-logfire.instrument_fastapi(app)
 
 app.include_router(dev_router)
 app.include_router(biz_router)

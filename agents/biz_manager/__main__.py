@@ -3,7 +3,7 @@ import typer
 from rich.console import Console
 from rich.prompt import Prompt
 
-from observability.logfire_config import configure_logfire
+from observability.langfuse_config import configure_observability, get_langfuse
 from memory.biz_manager.context import retrieve_context, save_interaction
 from agents.biz_manager.agent import agent
 
@@ -12,7 +12,8 @@ console = Console()
 
 
 async def chat_loop() -> None:
-    configure_logfire("biz-manager")
+    configure_observability("biz-manager")
+    lf = get_langfuse()
     console.print("[bold blue]Business Manager[/] — prêt. Tape 'exit' pour quitter.\n")
     history: list = []
 
@@ -22,19 +23,20 @@ async def chat_loop() -> None:
             if user_input.lower() in ("exit", "quit"):
                 break
 
-            # Injection du contexte mémorisé pertinent
             context = retrieve_context(user_input)
             prompt = f"{context}\n\n{user_input}" if context else user_input
 
+            trace = lf.trace(name="biz-manager-chat", input={"message": user_input})
             with console.status("Réflexion..."):
                 result = await agent.run(prompt, message_history=history)
 
             response = result.data
+            trace.update(output={"response": response}, metadata={"agent": "biz-manager"})
             console.print(f"\n[bold blue]Business Manager[/]\n{response}\n")
             history = result.all_messages()
-
-            # Mémorisation de l'interaction pour enrichir le contexte futur
             save_interaction(user_input, response)
+
+    lf.flush()
 
 
 @app.command()

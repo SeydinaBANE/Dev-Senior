@@ -33,8 +33,8 @@ Dernière mise à jour : 2026-05-18
 - [x] `memory/dev_senior/indexer.py` — indexation codebase CLI (incrémentale, Qdrant upsert)
 - [x] `memory/dev_senior/retriever.py` — RAG (contexte injecté avant chaque requête)
 - [x] `memory/biz_manager/context.py` — mémoire contextuelle (notes, interactions, Qdrant)
-- [x] `observability/logfire_config.py` — Logfire + instrumentation Pydantic AI/httpx
-- [x] `observability/evals/eval_quality.py` — LLM-as-judge (Claude Haiku)
+- [x] `observability/langfuse_config.py` — Langfuse : traces par appel agent, scores LLM-as-judge
+- [x] `observability/evals/eval_quality.py` — LLM-as-judge (OpenRouter) + scores Langfuse
 - [x] `observability/evals/eval_drift.py` — détection de dérive vs baseline
 
 ---

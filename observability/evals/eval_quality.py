@@ -1,11 +1,10 @@
 """
-Évaluation de la qualité des réponses — LLM-as-judge.
+Évaluation de la qualité des réponses — LLM-as-judge + Langfuse scores.
 
 Usage :
-    python -m observability.evals.eval_quality --agent dev-senior --samples 20
+    python -m observability.evals.eval_quality --agent dev-senior --samples-file samples.json
 
-Évalue un échantillon d'interactions récentes et produit un score de qualité.
-Requiert ANTHROPIC_API_KEY (utilise Claude comme juge).
+Évalue un fichier de samples et enregistre les scores dans Langfuse.
 """
 import json
 import asyncio
@@ -17,14 +16,17 @@ from rich.console import Console
 from rich.table import Table
 
 from pydantic_ai import Agent
-from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.openai import OpenAIModel
 from pydantic import BaseModel
+
+from observability.langfuse_config import get_langfuse
 
 app = typer.Typer()
 console = Console()
 
 EVALS_DIR = Path("observability/evals/results")
-JUDGE_MODEL = "claude-haiku-4-5-20251001"  # modèle rapide et économique pour le jugement
+# Modèle rapide et économique pour le jugement — accessible via OpenRouter
+JUDGE_MODEL = "anthropic/claude-haiku-4-5"
 
 
 class EvalScore(BaseModel):
@@ -52,12 +54,22 @@ Réponds uniquement en JSON valide avec les champs : score, helpfulness, accurac
 """.strip()
 
 
-async def judge_interaction(question: str, response: str) -> EvalScore:
-    judge = Agent(
-        model=AnthropicModel(JUDGE_MODEL),
+def _judge_agent() -> Agent:
+    import os
+    model = OpenAIModel(
+        JUDGE_MODEL,
+        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        api_key=os.getenv("OPENROUTER_API_KEY", ""),
+    )
+    return Agent(
+        model=model,
         system_prompt="Tu es un évaluateur strict et objectif d'agents IA.",
         result_type=EvalScore,
     )
+
+
+async def judge_interaction(question: str, response: str) -> EvalScore:
+    judge = _judge_agent()
     prompt = JUDGE_PROMPT.format(question=question, response=response)
     result = await judge.run(prompt)
     return result.data
@@ -67,6 +79,7 @@ async def judge_interaction(question: str, response: str) -> EvalScore:
 def run(
     agent: str = typer.Option("dev-senior", help="Agent à évaluer ('dev-senior' ou 'biz-manager')"),
     samples_file: str = typer.Option("", help="Fichier JSON de samples (question/response pairs)"),
+    push_to_langfuse: bool = typer.Option(True, help="Envoyer les scores vers Langfuse"),
 ) -> None:
     """Lance une évaluation qualité sur un fichier de samples."""
     if not samples_file:
@@ -78,6 +91,7 @@ def run(
     console.print(f"[green]Évaluation de {len(samples)} samples pour l'agent '{agent}'...[/]")
 
     scores: list[EvalScore] = []
+    lf = get_langfuse() if push_to_langfuse else None
 
     async def run_evals() -> None:
         for i, sample in enumerate(samples, 1):
@@ -85,7 +99,21 @@ def run(
             score = await judge_interaction(sample["question"], sample["response"])
             scores.append(score)
 
+            # Enregistrement dans Langfuse
+            if lf:
+                trace = lf.trace(
+                    name=f"{agent}-eval",
+                    input={"question": sample["question"]},
+                    output={"response": sample["response"]},
+                    metadata={"agent": agent, "eval_run": True},
+                )
+                for metric in ["score", "helpfulness", "accuracy", "safety"]:
+                    trace.score(name=metric, value=getattr(score, metric) / 5.0)
+
     asyncio.run(run_evals())
+
+    if lf:
+        lf.flush()
 
     # Affichage des résultats
     table = Table(title=f"Résultats eval — {agent}")
@@ -104,7 +132,7 @@ def run(
         )
     console.print(table)
 
-    # Sauvegarde des résultats
+    # Sauvegarde locale des résultats
     EVALS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     output = EVALS_DIR / f"{agent}_{timestamp}.json"
@@ -113,6 +141,8 @@ def run(
         ensure_ascii=False, indent=2,
     ))
     console.print(f"[green]Résultats sauvegardés dans {output}[/]")
+    if lf:
+        console.print("[green]Scores envoyés dans Langfuse.[/]")
 
 
 if __name__ == "__main__":

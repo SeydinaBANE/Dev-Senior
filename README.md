@@ -91,7 +91,7 @@ make healthcheck
 | Intégrations | MCP (serveurs custom) |
 | Mémoire vectorielle | Qdrant (Docker) |
 | Sessions persistantes | PostgreSQL + asyncpg |
-| Observabilité | Logfire |
+| Observabilité | Langfuse (traces + scores) |
 | API interne | FastAPI + uvicorn |
 | Frontend | React 18 + Vite + TypeScript + Tailwind |
 | Automatisation | n8n (Docker) |
