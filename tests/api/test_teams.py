@@ -27,10 +27,19 @@ from fastapi.testclient import TestClient  # noqa: E402
 from api.routes.teams import router, _parse_agent_and_text  # noqa: E402
 
 
+def _make_sessions() -> MagicMock:
+    mock = MagicMock()
+    mock.get_history = AsyncMock(return_value=[])
+    mock.set_history = AsyncMock()
+    mock.delete_session = AsyncMock()
+    return mock
+
+
 @pytest.fixture
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(router)
+    app.state.sessions = _make_sessions()
     return TestClient(app)
 
 
@@ -98,13 +107,14 @@ def test_message_empty_text(client: TestClient) -> None:
 def test_message_routes_to_dev_senior(client: TestClient) -> None:
     mock_result = MagicMock()
     mock_result.data = "Réponse Dev Senior"
+    mock_result.all_messages = MagicMock(return_value=[])
 
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
         with patch("api.routes.teams.dev_agent") as mock_agent:
             mock_agent.run = AsyncMock(return_value=mock_result)
             r = client.post(
                 "/teams/message",
-                json={"type": "message", "text": "@dev-senior explique ce code"},
+                json={"type": "message", "text": "@dev-senior explique ce code", "conversation": {"id": "conv-1"}},
             )
 
     assert r.status_code == 200
@@ -115,17 +125,48 @@ def test_message_routes_to_dev_senior(client: TestClient) -> None:
 def test_message_routes_to_biz_manager(client: TestClient) -> None:
     mock_result = MagicMock()
     mock_result.data = "Réponse Biz Manager"
+    mock_result.all_messages = MagicMock(return_value=[])
 
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
         with patch("api.routes.teams.biz_agent") as mock_agent:
             mock_agent.run = AsyncMock(return_value=mock_result)
             r = client.post(
                 "/teams/message",
-                json={"type": "message", "text": "@biz-manager analyse ce lead"},
+                json={"type": "message", "text": "@biz-manager analyse ce lead", "conversation": {"id": "conv-2"}},
             )
 
     assert r.status_code == 200
     assert r.json()["text"] == "Réponse Biz Manager"
+
+
+def test_message_saves_session_history(client: TestClient) -> None:
+    mock_result = MagicMock()
+    mock_result.data = "Réponse."
+    mock_result.all_messages = MagicMock(return_value=[])
+
+    with patch("api.routes.teams._WEBHOOK_KEY", ""):
+        with patch("api.routes.teams.dev_agent") as mock_agent:
+            mock_agent.run = AsyncMock(return_value=mock_result)
+            client.post(
+                "/teams/message",
+                json={"type": "message", "text": "question", "conversation": {"id": "conv-42"}},
+            )
+
+    client.app.state.sessions.set_history.assert_awaited_once()
+    call_args = client.app.state.sessions.set_history.call_args[0]
+    assert call_args[0] == "teams:conv-42"
+
+
+def test_message_reset_deletes_session(client: TestClient) -> None:
+    with patch("api.routes.teams._WEBHOOK_KEY", ""):
+        r = client.post(
+            "/teams/message",
+            json={"type": "message", "text": "reset", "conversation": {"id": "conv-99"}},
+        )
+
+    assert r.status_code == 200
+    assert "réinitialisée" in r.json()["text"]
+    client.app.state.sessions.delete_session.assert_awaited_once_with("teams:conv-99")
 
 
 def test_message_invalid_signature_rejected(client: TestClient) -> None:
@@ -153,7 +194,7 @@ def test_message_agent_error_returns_message(client: TestClient) -> None:
             mock_agent.run = AsyncMock(side_effect=RuntimeError("oops"))
             r = client.post(
                 "/teams/message",
-                json={"type": "message", "text": "question"},
+                json={"type": "message", "text": "question", "conversation": {"id": "conv-err"}},
             )
 
     assert r.status_code == 200

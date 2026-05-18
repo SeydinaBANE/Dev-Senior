@@ -132,9 +132,13 @@ class PostgresSessionStore(SessionStore):
         return json.loads(row["history"])
 
     async def set_history(self, session_id: str, history: list) -> None:
+        now = datetime.now(timezone.utc)
         await self._pool.execute(
-            "UPDATE sessions SET history = $1, updated_at = $2 WHERE id = $3",
-            json.dumps(history), datetime.now(timezone.utc), session_id,
+            """INSERT INTO sessions (id, agent, history, updated_at)
+               VALUES ($1, 'external', $2, $3)
+               ON CONFLICT (id) DO UPDATE
+               SET history = EXCLUDED.history, updated_at = EXCLUDED.updated_at""",
+            session_id, json.dumps(history), now,
         )
 
     async def delete_session(self, session_id: str) -> None:

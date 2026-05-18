@@ -27,10 +27,19 @@ from fastapi.testclient import TestClient  # noqa: E402
 from api.routes.slack import router, _run_agent_and_reply  # noqa: E402
 
 
+def _make_sessions() -> MagicMock:
+    mock = MagicMock()
+    mock.get_history = AsyncMock(return_value=[])
+    mock.set_history = AsyncMock()
+    mock.delete_session = AsyncMock()
+    return mock
+
+
 @pytest.fixture
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(router)
+    app.state.sessions = _make_sessions()
     return TestClient(app)
 
 
@@ -78,6 +87,8 @@ def test_command_dev_senior_acks_immediately(client: TestClient) -> None:
                 "text": "how do I refactor this?",
                 "response_url": "http://hooks.slack.com/x",
                 "user_name": "alice",
+                "channel_id": "C123",
+                "user_id": "U456",
             },
         )
     assert r.status_code == 200
@@ -96,10 +107,31 @@ def test_command_biz_manager_acks_immediately(client: TestClient) -> None:
                 "text": "analyse ce lead",
                 "response_url": "http://hooks.slack.com/y",
                 "user_name": "carol",
+                "channel_id": "C123",
+                "user_id": "U789",
             },
         )
     assert r.status_code == 200
     assert r.json()["response_type"] == "in_channel"
+
+
+def test_command_reset_deletes_session(client: TestClient) -> None:
+    with patch("api.routes.slack._SIGNING_SECRET", ""):
+        r = client.post(
+            "/slack/command",
+            data={
+                "command": "/dev-senior",
+                "text": "reset",
+                "response_url": "http://hooks.slack.com/x",
+                "user_name": "alice",
+                "channel_id": "C123",
+                "user_id": "U456",
+            },
+        )
+    assert r.status_code == 200
+    assert r.json()["response_type"] == "ephemeral"
+    assert "réinitialisée" in r.json()["text"]
+    client.app.state.sessions.delete_session.assert_awaited_once_with("slack:C123:U456")
 
 
 def test_command_invalid_signature_rejected(client: TestClient) -> None:
@@ -129,6 +161,9 @@ def test_command_expired_timestamp_rejected(client: TestClient) -> None:
 async def test_run_agent_posts_to_response_url() -> None:
     mock_result = MagicMock()
     mock_result.data = "Voici ma réponse."
+    mock_result.all_messages = MagicMock(return_value=[])
+
+    mock_sessions = _make_sessions()
 
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
@@ -138,7 +173,10 @@ async def test_run_agent_posts_to_response_url() -> None:
     with patch("api.routes.slack.dev_agent") as mock_agent:
         mock_agent.run = AsyncMock(return_value=mock_result)
         with patch("httpx.AsyncClient", return_value=mock_ctx):
-            await _run_agent_and_reply("dev-senior", "ma question", "http://hooks.slack.com/z")
+            await _run_agent_and_reply(
+                "dev-senior", "ma question", "http://hooks.slack.com/z",
+                mock_sessions, "slack:C123:U456",
+            )
 
     mock_ctx.post.assert_awaited_once()
     payload = mock_ctx.post.call_args[1]["json"]
@@ -147,7 +185,35 @@ async def test_run_agent_posts_to_response_url() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_agent_saves_history_after_run() -> None:
+    mock_result = MagicMock()
+    mock_result.data = "Réponse."
+    mock_result.all_messages = MagicMock(return_value=[])
+
+    mock_sessions = _make_sessions()
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_ctx.post = AsyncMock()
+
+    with patch("api.routes.slack.dev_agent") as mock_agent:
+        mock_agent.run = AsyncMock(return_value=mock_result)
+        with patch("httpx.AsyncClient", return_value=mock_ctx):
+            await _run_agent_and_reply(
+                "dev-senior", "question", "http://hooks.slack.com/z",
+                mock_sessions, "slack:C123:U456",
+            )
+
+    mock_sessions.set_history.assert_awaited_once()
+    call_args = mock_sessions.set_history.call_args[0]
+    assert call_args[0] == "slack:C123:U456"
+
+
+@pytest.mark.asyncio
 async def test_run_agent_posts_error_on_exception() -> None:
+    mock_sessions = _make_sessions()
+
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
@@ -156,7 +222,10 @@ async def test_run_agent_posts_error_on_exception() -> None:
     with patch("api.routes.slack.dev_agent") as mock_agent:
         mock_agent.run = AsyncMock(side_effect=RuntimeError("boom"))
         with patch("httpx.AsyncClient", return_value=mock_ctx):
-            await _run_agent_and_reply("dev-senior", "question", "http://hooks.slack.com/z")
+            await _run_agent_and_reply(
+                "dev-senior", "question", "http://hooks.slack.com/z",
+                mock_sessions, "slack:C123:U456",
+            )
 
     payload = mock_ctx.post.call_args[1]["json"]
     assert ":warning:" in payload["text"]
