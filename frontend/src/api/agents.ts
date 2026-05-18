@@ -15,20 +15,43 @@ export interface ChatResponse {
   session_id: string
 }
 
+export interface UploadResponse {
+  filename: string
+  text: string
+  size_chars: number
+}
+
 export type StreamChunk =
   | { type: 'session'; sessionId: string }
   | { type: 'chunk'; text: string }
   | { type: 'done' }
 
+export async function uploadFile(agent: AgentType, file: File): Promise<UploadResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${API_BASE}/${agent}/upload`, {
+    method: 'POST',
+    // No Content-Type header — browser sets multipart/form-data + boundary automatically
+    headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` })) as { detail?: string }
+    throw new Error(err.detail ?? `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<UploadResponse>
+}
+
 export async function* sendChatStream(
   agent: AgentType,
   message: string,
   sessionId: string,
+  documentContext = '',
 ): AsyncGenerator<StreamChunk> {
   const res = await fetch(`${API_BASE}/${agent}/chat/stream`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ message, session_id: sessionId }),
+    body: JSON.stringify({ message, session_id: sessionId, document_context: documentContext }),
   })
   if (!res.ok) {
     const err = await res.text()
