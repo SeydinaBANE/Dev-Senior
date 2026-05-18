@@ -105,8 +105,8 @@ make healthcheck
 | Sessions | Redis (TTL natif) ou PostgreSQL + asyncpg (fallback automatique) |
 | Observabilité | Langfuse (traces + LLM-as-judge + dérive) |
 | Dashboard métriques | FastAPI `/metrics` + composant React (P50/P95, taux d'erreur, qualité) |
-| API interne | FastAPI + uvicorn |
-| Frontend | React 18 + Vite + TypeScript + Tailwind — servi en prod via FastAPI `/app` |
+| API interne | FastAPI + uvicorn — réponses complètes (`/chat`) et streaming SSE (`/chat/stream`) |
+| Frontend | React 18 + Vite + TypeScript + Tailwind — streaming token-par-token, servi en prod via FastAPI `/app` |
 | Chat d'équipe | Slack slash commands · Teams outgoing webhook |
 | Automatisation | n8n — 5 workflows prêts à l'emploi |
 | Infra | Docker Compose, GitHub Actions CI/CD, launchd (macOS) |
@@ -143,6 +143,19 @@ Slack reçoit un accusé immédiat ; la réponse de l'agent est postée en diff�
 ### Intégration Teams
 Créer un outgoing webhook Teams pointant vers `POST /teams/message`.  
 Routage par mention : `@dev-senior <message>` ou `@biz-manager <message>`.
+
+### Streaming des réponses (SSE)
+Le frontend affiche les tokens au fur et à mesure via Server-Sent Events :
+
+```
+Envoi → [dots pensée] → premier token → [texte qui s'écrit avec curseur |] → complet
+```
+
+Deux modes coexistent sur l'API :
+| Endpoint | Mode | Usage |
+|---|---|---|
+| `POST /dev-senior/chat` | Réponse complète (JSON) | n8n, intégrations tierces |
+| `POST /dev-senior/chat/stream` | SSE token-par-token | Frontend, Slack (background) |
 
 ### Évaluation automatique quotidienne
 Un job launchd (`make install-eval-cron`) tourne chaque nuit à 2h :

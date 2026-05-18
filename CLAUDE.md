@@ -32,8 +32,8 @@ api/
   sessions.py       ← SessionStore (ABC) → RedisSessionStore | PostgresSessionStore
   metrics_store.py  ← métriques in-memory thread-safe (P50/P95, taux d'erreur)
   routes/
-    dev_senior.py   ← POST /dev-senior/chat|reset + GET /health
-    biz_manager.py  ← POST /biz-manager/chat|task|reset + GET /health
+    dev_senior.py   ← POST /dev-senior/chat (JSON) | /chat/stream (SSE) | /reset | GET /health
+    biz_manager.py  ← POST /biz-manager/chat (JSON) | /chat/stream (SSE) | /task | /reset | GET /health
     metrics.py      ← GET /metrics (latence + qualité, auth requise)
     slack.py        ← POST /slack/command (slash commands /dev-senior /biz-manager)
     teams.py        ← POST /teams/message (outgoing webhook, routage par @mention)
@@ -73,7 +73,7 @@ tests/
   mcp_servers/   ← test_github.py, test_crm.py, test_seo.py, test_google_workspace.py
   memory/        ← test_shared.py
   observability/ ← test_evals.py
-  api/           ← test_sessions.py, test_slack.py, test_teams.py
+  api/           ← test_sessions.py, test_slack.py, test_teams.py, test_streaming.py
 
 docs/            ← guide_dev_senior.md, guide_biz_manager.md
 
@@ -123,7 +123,7 @@ make install-service    # installer le service launchd API (démarrage au boot)
 - MCP servers : `FastMCP` de `mcp.server.fastmcp`, `if __name__ == "__main__": mcp.run()`
 - Sessions : `SessionStore.create()` dans le lifespan → `app.state.sessions`. Les routes utilisent `request.app.state.sessions` (duck-typed, Redis ou PostgreSQL selon `REDIS_URL`)
 - Sérialisation Pydantic AI : `ModelMessagesTypeAdapter.dump_python(..., mode="json")` pour JSON
-- Tests : `TestModel` de Pydantic AI pour les smoke tests (pas d'appel réseau). Pour les routes Slack/Teams, injecter des agents factices via `sys.modules` avant l'import (pattern dans `tests/api/test_slack.py`)
+- Tests : `TestModel` de Pydantic AI pour les smoke tests (pas d'appel réseau). Pour les routes Slack/Teams/streaming, injecter des agents factices via `sys.modules` avant l'import (pattern dans `tests/api/test_slack.py`). Pour les endpoints streaming, mocker `agent.run_stream()` avec un `@asynccontextmanager` qui yield un objet dont `stream_text()` est un générateur async (pattern dans `tests/api/test_streaming.py`)
 - Pas de commentaires évidents — seulement les "pourquoi" non-triviaux
 - Slack : lire `await request.body()` AVANT tout `Form()` parsing pour éviter "Stream consumed" — parser le form-encoded body manuellement avec `urllib.parse.parse_qs`
 
@@ -165,6 +165,7 @@ make install-service    # installer le service launchd API (démarrage au boot)
 - **SessionStore (ABC)** : factory `SessionStore.create()` sélectionne Redis si `REDIS_URL` est défini, sinon PostgreSQL. Zéro changement côté routes. `RedisSessionStore` utilise des hashes Redis avec `EXPIRE` natif ; `PostgresSessionStore` wrape asyncpg avec cleanup TTL manuel
 - **MCPServerStdio** : MCP servers démarrés une fois au lancement via `agent.run_mcp_servers()`
 - **React + Vite** : frontend découplé, dev proxy vers l'API sur :8080, build statique pour la prod (`base: '/app/'`). En prod, `StaticFiles(html=True)` sur `/app` sert le SPA avec fallback. `VITE_API_URL` permet de déployer le frontend sur un hôte différent
+- **Streaming SSE** : `POST /chat/stream` utilise `agent.run_stream(delta=True)` et retourne `StreamingResponse(media_type="text/event-stream")`. Format : `event: session` → deltas JSON-encodés → `data: [DONE]` (ou `event: error`). Le JSON-encoding des deltas évite les problèmes de caractères spéciaux dans le protocole SSE. Session et `save_interaction()` sauvegardés après le stream, pas pendant. `X-Accel-Buffering: no` désactive le buffering nginx. Les endpoints `/chat` (JSON) coexistent comme fallback pour n8n
 - **Slack** : ack immédiat (< 3s) + `BackgroundTask` pour le vrai appel agent + POST à `response_url`. Body lu brut pour HMAC avant parsing manuel du form
 - **Teams** : réponse synchrone (Teams n'a pas de timeout strict), routage par regex sur le préfixe `@mention`, nettoyage HTML des balises Teams
 - **Métriques** : `_AgentStore` in-memory avec `threading.Lock`, snapshot `statistics.quantiles` pour P50/P95. `GET /metrics` agrège runtime + dernier fichier JSON d'évaluation
