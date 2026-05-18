@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from agents.biz_manager.agent import agent
 from memory.biz_manager.context import retrieve_context, save_interaction
+from api.auth import require_api_key
 from api.sessions import new_session, get_history, set_history, delete_session
 
 router = APIRouter(prefix="/biz-manager", tags=["Business Manager"])
@@ -27,7 +28,7 @@ class TaskResponse(BaseModel):
     result: str
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
 async def chat(req: ChatRequest) -> ChatResponse:
     """Envoie un message à l'agent Business Manager et retourne sa réponse."""
     session_id = req.session_id or new_session()
@@ -45,7 +46,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
     return ChatResponse(response=response, session_id=session_id)
 
 
-@router.post("/task", response_model=TaskResponse)
+@router.post("/task", response_model=TaskResponse, dependencies=[Depends(require_api_key)])
 async def run_task(req: TaskRequest) -> TaskResponse:
     """
     Exécution one-shot pour les workflows n8n (sans historique de session).
@@ -57,7 +58,7 @@ async def run_task(req: TaskRequest) -> TaskResponse:
     return TaskResponse(result=result.data)
 
 
-@router.post("/reset/{session_id}")
+@router.post("/reset/{session_id}", dependencies=[Depends(require_api_key)])
 async def reset_session(session_id: str) -> dict:
     delete_session(session_id)
     return {"status": "ok", "session_id": session_id}

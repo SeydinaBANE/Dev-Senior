@@ -18,13 +18,7 @@
     {
       "parameters": {
         "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.action }}",
-              "operation": "equal",
-              "value2": "opened"
-            }
-          ]
+          "string": [{ "value1": "={{ $json.action }}", "operation": "equal", "value2": "opened" }]
         }
       },
       "id": "a1b2c3d4-0001-0001-0001-000000000002",
@@ -39,7 +33,10 @@
         "url": "={{ $env.AGENTS_API_URL }}/dev-senior/chat",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
@@ -50,7 +47,7 @@
             }
           ]
         },
-        "options": {}
+        "options": { "timeout": 60000 }
       },
       "id": "a1b2c3d4-0001-0001-0001-000000000003",
       "name": "Dev Senior — Review PR",
@@ -97,23 +94,12 @@
     }
   ],
   "connections": {
-    "Webhook GitHub PR": {
-      "main": [[{ "node": "Filtre — PR ouverte", "type": "main", "index": 0 }]]
-    },
-    "Filtre — PR ouverte": {
-      "main": [
-        [{ "node": "Dev Senior — Review PR", "type": "main", "index": 0 }],
-        []
-      ]
-    },
-    "Dev Senior — Review PR": {
-      "main": [[{ "node": "Poster le commentaire GitHub", "type": "main", "index": 0 }]]
-    },
-    "Poster le commentaire GitHub": {
-      "main": [[{ "node": "Réponse Webhook", "type": "main", "index": 0 }]]
-    }
+    "Webhook GitHub PR": { "main": [[{ "node": "Filtre — PR ouverte", "type": "main", "index": 0 }]] },
+    "Filtre — PR ouverte": { "main": [[{ "node": "Dev Senior — Review PR", "type": "main", "index": 0 }], []] },
+    "Dev Senior — Review PR": { "main": [[{ "node": "Poster le commentaire GitHub", "type": "main", "index": 0 }]] },
+    "Poster le commentaire GitHub": { "main": [[{ "node": "Réponse Webhook", "type": "main", "index": 0 }]] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },
-  "notes": "Prérequis : GITHUB_TOKEN et AGENTS_API_URL dans les variables d'env n8n"
+  "notes": "Variables n8n requises : AGENTS_API_URL, AGENTS_API_KEY, GITHUB_TOKEN"
 }

@@ -20,7 +20,10 @@
         "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
@@ -55,8 +58,7 @@
       "name": "Envoyer par email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [500, 300],
-      "notes": "Configurer les credentials SMTP dans n8n"
+      "position": [500, 300]
     },
     {
       "parameters": {
@@ -64,7 +66,10 @@
         "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
@@ -85,17 +90,11 @@
     }
   ],
   "connections": {
-    "Chaque lundi 8h": {
-      "main": [[{ "node": "Biz Manager — Rapport SEO", "type": "main", "index": 0 }]]
-    },
-    "Biz Manager — Rapport SEO": {
-      "main": [[{ "node": "Envoyer par email", "type": "main", "index": 0 }]]
-    },
-    "Envoyer par email": {
-      "main": [[{ "node": "Archiver sur Drive", "type": "main", "index": 0 }]]
-    }
+    "Chaque lundi 8h": { "main": [[{ "node": "Biz Manager — Rapport SEO", "type": "main", "index": 0 }]] },
+    "Biz Manager — Rapport SEO": { "main": [[{ "node": "Envoyer par email", "type": "main", "index": 0 }]] },
+    "Envoyer par email": { "main": [[{ "node": "Archiver sur Drive", "type": "main", "index": 0 }]] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },
-  "notes": "Prérequis : AGENTS_API_URL, SENDER_EMAIL, REPORT_RECIPIENTS dans les variables n8n. Credentials SMTP configurés."
+  "notes": "Variables n8n requises : AGENTS_API_URL, AGENTS_API_KEY, SENDER_EMAIL, REPORT_RECIPIENTS. Credentials SMTP configurés."
 }

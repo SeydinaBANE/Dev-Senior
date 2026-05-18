@@ -12,8 +12,7 @@
       "name": "Chaque vendredi 10h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [100, 300],
-      "notes": "Génère le contenu de la semaine suivante chaque vendredi"
+      "position": [100, 300]
     },
     {
       "parameters": {
@@ -21,14 +20,17 @@
         "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "task",
-              "value": "=Crée un calendrier éditorial complet pour la semaine prochaine ({{ $now.plus(7, 'days').toFormat('dd/MM') }} au {{ $now.plus(13, 'days').toFormat('dd/MM') }}).\n\nProduis exactement ce format JSON :\n{\n  \"linkedin\": [\n    {\"day\": \"Lundi\", \"post\": \"texte du post\", \"hashtags\": [\"#tag1\"]},\n    {\"day\": \"Mercredi\", \"post\": \"texte du post\", \"hashtags\": [\"#tag2\"]},\n    {\"day\": \"Vendredi\", \"post\": \"texte du post\", \"hashtags\": [\"#tag3\"]}\n  ],\n  \"instagram\": [\n    {\"day\": \"Mardi\", \"caption\": \"légende\", \"visual_idea\": \"idée visuelle\"},\n    {\"day\": \"Jeudi\", \"caption\": \"légende\", \"visual_idea\": \"idée visuelle\"}\n  ],\n  \"newsletter_topic\": \"sujet proposé pour la newsletter\"\n}\n\nThème de la semaine : tech et productivité. Ton : professionnel mais accessible."
+              "value": "=Crée un calendrier éditorial complet pour la semaine prochaine.\n\nProduis exactement ce format JSON :\n{\n  \"linkedin\": [\n    {\"day\": \"Lundi\", \"post\": \"texte du post\", \"hashtags\": [\"#tag1\"]},\n    {\"day\": \"Mercredi\", \"post\": \"texte du post\", \"hashtags\": [\"#tag2\"]},\n    {\"day\": \"Vendredi\", \"post\": \"texte du post\", \"hashtags\": [\"#tag3\"]}\n  ],\n  \"instagram\": [\n    {\"day\": \"Mardi\", \"caption\": \"légende\", \"visual_idea\": \"idée visuelle\"},\n    {\"day\": \"Jeudi\", \"caption\": \"légende\", \"visual_idea\": \"idée visuelle\"}\n  ],\n  \"newsletter_topic\": \"sujet proposé pour la newsletter\"\n}\n\nThème de la semaine : tech et productivité. Ton : professionnel mais accessible."
             }
           ]
         },
@@ -42,7 +44,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.item.json.result;\n// Extraire le JSON du résultat (peut être entouré de markdown)\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nconst calendar = match ? JSON.parse(match[0]) : {};\nreturn [{ json: { calendar, raw } }];"
+        "jsCode": "const raw = $input.item.json.result;\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nconst calendar = match ? JSON.parse(match[0]) : {};\nreturn [{ json: { calendar, raw } }];"
       },
       "id": "e5f6a7b8-0005-0005-0005-000000000003",
       "name": "Parser le calendrier",
@@ -56,14 +58,17 @@
         "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "task",
-              "value": "=Crée un Google Doc 'Calendrier Contenu — semaine du {{ $now.plus(7, 'days').toFormat('dd/MM/yyyy') }}' avec ce planning éditorial formaté proprement :\n\n{{ $json.raw }}"
+              "value": "=Crée un Google Doc 'Calendrier Contenu — semaine du {{ $now.plus(7, 'days').toFormat('dd/MM/yyyy') }}' avec ce planning éditorial :\n\n{{ $json.raw }}"
             }
           ]
         },
@@ -91,20 +96,11 @@
     }
   ],
   "connections": {
-    "Chaque vendredi 10h": {
-      "main": [[{ "node": "Biz Manager — Générer contenu", "type": "main", "index": 0 }]]
-    },
-    "Biz Manager — Générer contenu": {
-      "main": [[{ "node": "Parser le calendrier", "type": "main", "index": 0 }]]
-    },
-    "Parser le calendrier": {
-      "main": [[
-        { "node": "Sauvegarder sur Drive", "type": "main", "index": 0 },
-        { "node": "Envoyer à l'équipe", "type": "main", "index": 0 }
-      ]]
-    }
+    "Chaque vendredi 10h": { "main": [[{ "node": "Biz Manager — Générer contenu", "type": "main", "index": 0 }]] },
+    "Biz Manager — Générer contenu": { "main": [[{ "node": "Parser le calendrier", "type": "main", "index": 0 }]] },
+    "Parser le calendrier": { "main": [[{ "node": "Sauvegarder sur Drive", "type": "main", "index": 0 }, { "node": "Envoyer à l'équipe", "type": "main", "index": 0 }]] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },
-  "notes": "Prérequis : AGENTS_API_URL, SENDER_EMAIL, CONTENT_TEAM_EMAIL. Personnaliser le thème hebdo dans le prompt."
+  "notes": "Variables n8n requises : AGENTS_API_URL, AGENTS_API_KEY, SENDER_EMAIL, CONTENT_TEAM_EMAIL"
 }

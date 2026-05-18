@@ -20,25 +20,29 @@ build/
 htmlcov/
 .coverage
 
-# Données locales (ne pas committer les vecteurs ni les modèles)
+# Données locales — ne jamais committer
 memory/vector_store/
 infra/docker/volumes/
+observability/evals/results/    # résultats d'eval (générés, pas du code)
+logs/
+*.log
+*.pid
+
+# Secrets Google — NE JAMAIS committer
+credentials.json
+token.json
+service_account.json
+*.pem
+*.key
+*.p12
 
 # macOS
 .DS_Store
 .AppleDouble
+.LSOverride
 
 # IDE
 .vscode/
 .idea/
 *.swp
-
-# Logs
-*.log
-logs/
-
-# Secrets
-*.pem
-*.key
-credentials.json
-token.json
+*.swo

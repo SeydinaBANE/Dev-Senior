@@ -12,8 +12,7 @@
       "name": "Webhook Nouveau Lead",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 300],
-      "notes": "Déclenché par HubSpot, formulaire web, ou manuellement"
+      "position": [100, 300]
     },
     {
       "parameters": {
@@ -21,7 +20,10 @@
         "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
@@ -61,7 +63,10 @@
         "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
@@ -93,20 +98,12 @@
     }
   ],
   "connections": {
-    "Webhook Nouveau Lead": {
-      "main": [[{ "node": "Biz Manager — Rédiger email", "type": "main", "index": 0 }]]
-    },
-    "Biz Manager — Rédiger email": {
-      "main": [[{ "node": "Envoyer email bienvenue", "type": "main", "index": 0 }]]
-    },
-    "Envoyer email bienvenue": {
-      "main": [[{ "node": "Biz Manager — Note CRM", "type": "main", "index": 0 }]]
-    },
-    "Biz Manager — Note CRM": {
-      "main": [[{ "node": "Réponse Webhook", "type": "main", "index": 0 }]]
-    }
+    "Webhook Nouveau Lead": { "main": [[{ "node": "Biz Manager — Rédiger email", "type": "main", "index": 0 }]] },
+    "Biz Manager — Rédiger email": { "main": [[{ "node": "Envoyer email bienvenue", "type": "main", "index": 0 }]] },
+    "Envoyer email bienvenue": { "main": [[{ "node": "Biz Manager — Note CRM", "type": "main", "index": 0 }]] },
+    "Biz Manager — Note CRM": { "main": [[{ "node": "Réponse Webhook", "type": "main", "index": 0 }]] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },
-  "notes": "Payload attendu : { firstname, lastname, email, company, industry?, source?, message? }"
+  "notes": "Variables n8n requises : AGENTS_API_URL, AGENTS_API_KEY. Payload : { firstname, lastname, email, company, industry?, source?, message? }"
 }

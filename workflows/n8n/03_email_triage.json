@@ -16,17 +16,14 @@
         "operation": "getAll",
         "returnAll": false,
         "limit": 10,
-        "filters": {
-          "labelIds": ["INBOX", "UNREAD"]
-        },
+        "filters": { "labelIds": ["INBOX", "UNREAD"] },
         "options": {}
       },
       "id": "c3d4e5f6-0003-0003-0003-000000000002",
       "name": "Lire emails non lus",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [300, 300],
-      "notes": "Configurer les credentials Google OAuth2 dans n8n"
+      "position": [300, 300]
     },
     {
       "parameters": {
@@ -46,7 +43,10 @@
         "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-API-Key", "value": "={{ $env.AGENTS_API_KEY }}" }
+          ]
         },
         "sendBody": true,
         "bodyParameters": {
@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const analysis = JSON.parse($input.item.json.result);\nreturn [\n  {\n    json: {\n      ...analysis,\n      email_id: $('Lire emails non lus').item.json.id,\n      from: $('Lire emails non lus').item.json.from,\n      subject: $('Lire emails non lus').item.json.subject,\n      is_high_priority: analysis.priority === 'high',\n    }\n  }\n];"
+        "jsCode": "const analysis = JSON.parse($input.item.json.result);\nreturn [{\n  json: {\n    ...analysis,\n    email_id: $('Lire emails non lus').item.json.id,\n    from: $('Lire emails non lus').item.json.from,\n    subject: $('Lire emails non lus').item.json.subject,\n    is_high_priority: analysis.priority === 'high',\n  }\n}];"
       },
       "id": "c3d4e5f6-0003-0003-0003-000000000005",
       "name": "Parser analyse",
@@ -96,37 +96,18 @@
       "name": "Alerte Slack",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2,
-      "position": [1300, 100],
-      "notes": "Optionnel : configurer Slack credentials"
+      "position": [1300, 100]
     }
   ],
   "connections": {
-    "Toutes les 30 min": {
-      "main": [[{ "node": "Lire emails non lus", "type": "main", "index": 0 }]]
-    },
-    "Lire emails non lus": {
-      "main": [[{ "node": "Y a-t-il des emails ?", "type": "main", "index": 0 }]]
-    },
-    "Y a-t-il des emails ?": {
-      "main": [
-        [{ "node": "Biz Manager — Analyser email", "type": "main", "index": 0 }],
-        []
-      ]
-    },
-    "Biz Manager — Analyser email": {
-      "main": [[{ "node": "Parser analyse", "type": "main", "index": 0 }]]
-    },
-    "Parser analyse": {
-      "main": [[{ "node": "Priorité haute ?", "type": "main", "index": 0 }]]
-    },
-    "Priorité haute ?": {
-      "main": [
-        [{ "node": "Alerte Slack", "type": "main", "index": 0 }],
-        []
-      ]
-    }
+    "Toutes les 30 min": { "main": [[{ "node": "Lire emails non lus", "type": "main", "index": 0 }]] },
+    "Lire emails non lus": { "main": [[{ "node": "Y a-t-il des emails ?", "type": "main", "index": 0 }]] },
+    "Y a-t-il des emails ?": { "main": [[{ "node": "Biz Manager — Analyser email", "type": "main", "index": 0 }], []] },
+    "Biz Manager — Analyser email": { "main": [[{ "node": "Parser analyse", "type": "main", "index": 0 }]] },
+    "Parser analyse": { "main": [[{ "node": "Priorité haute ?", "type": "main", "index": 0 }]] },
+    "Priorité haute ?": { "main": [[{ "node": "Alerte Slack", "type": "main", "index": 0 }], []] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },
-  "notes": "Prérequis : Google OAuth2, AGENTS_API_URL. Slack optionnel."
+  "notes": "Variables n8n requises : AGENTS_API_URL, AGENTS_API_KEY. Google OAuth2 et Slack optionnel."
 }
