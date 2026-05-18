@@ -1,27 +1,32 @@
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
     ports:
-      - "11434:11434"
+      - "6333:6333"   # HTTP REST
+      - "6334:6334"   # gRPC
     volumes:
-      - ollama_models:/root/.ollama
+      - qdrant_data:/qdrant/storage
     restart: unless-stopped
-    # Note: Docker Desktop sur Mac ne donne pas accès au GPU Metal.
-    # L'inférence tourne en CPU. Pour exploiter le M4, utiliser Ollama natif.
 
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: chromadb
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
     ports:
-      - "8000:8000"
+      - "5432:5432"
     volumes:
-      - chroma_data:/chroma/chroma
-    restart: unless-stopped
+      - postgres_data:/var/lib/postgresql/data
+      - ./../../infra/deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     environment:
-      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenConfigServerAuthCredentialsProvider
-      - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_TOKEN:-dev-token}
-      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
+      POSTGRES_DB: ${POSTGRES_DB:-agents_db}
+      POSTGRES_USER: ${POSTGRES_USER:-agents}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agents} -d ${POSTGRES_DB:-agents_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   n8n:
     image: n8nio/n8n:latest
@@ -30,7 +35,7 @@ services:
       - "5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./../../workflows/n8n:/workflows  # accès aux exports JSON
+      - ./../../workflows/n8n:/workflows
     restart: unless-stopped
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
@@ -40,12 +45,11 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - WEBHOOK_URL=http://localhost:5678/
-      # URL de l'API agents (pour les HTTP Request nodes)
       - AGENTS_API_URL=http://host.docker.internal:8080
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # accès à l'API agents depuis n8n
+      - "host.docker.internal:host-gateway"
 
 volumes:
-  ollama_models:
-  chroma_data:
+  qdrant_data:
+  postgres_data:
   n8n_data:

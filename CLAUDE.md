@@ -4,22 +4,23 @@
 
 Ce dépôt contient deux agents IA internes déployés sur Mac mini M4 :
 
-- **Dev Senior** (`agents/dev_senior/`) : assistant technique permanent. Connaît la codebase via RAG (ChromaDB). Accès GitHub via MCP.
+- **Dev Senior** (`agents/dev_senior/`) : assistant technique permanent. Connaît la codebase via RAG (Qdrant). Accès GitHub via MCP.
 - **Business Manager** (`agents/biz_manager/`) : assistant non-technique. Accès Google Workspace, CRM HubSpot, SEO via MCP. Mémoire des interactions.
 
-**Stack** : Pydantic AI · Ollama (Docker) · ChromaDB · FastAPI · n8n · Logfire · MCP custom
+**Stack** : Pydantic AI · OpenRouter · Qdrant · PostgreSQL · FastAPI · React (Vite) · n8n · Logfire · MCP custom
 
 ## Structure critique
 
 ```
 agents/          ← Pydantic AI agents (modèle, prompt, mémoire)
 mcp_servers/     ← Serveurs MCP (GitHub, Google WS, CRM, SEO)
-api/             ← FastAPI : auth.py (X-API-Key), main.py (CORS+lifespan), routes/
-memory/          ← ChromaDB : embeddings, indexer, retriever
+api/             ← FastAPI : auth.py, db.py (asyncpg), main.py, routes/, sessions.py
+memory/          ← Qdrant : embeddings (OpenRouter), indexer, retriever
 observability/   ← logfire_config.py, evals/ (qualité + dérive)
 workflows/n8n/   ← 5 JSONs importables (tous avec header X-API-Key)
-infra/docker/    ← docker-compose (Ollama+ChromaDB+n8n), pull-models.sh
-infra/deploy/    ← start/stop/healthcheck/launchd
+frontend/        ← React + Vite + TypeScript + Tailwind (port 5173)
+infra/docker/    ← docker-compose (Qdrant + PostgreSQL + n8n)
+infra/deploy/    ← start/stop/healthcheck/launchd + init.sql
 ```
 
 ## Commandes essentielles
@@ -28,16 +29,18 @@ infra/deploy/    ← start/stop/healthcheck/launchd
 make setup              # venv + pip install + pre-commit install
 make start              # tout démarrer (Docker + API)
 make stop               # tout arrêter
-make healthcheck        # vérifier Ollama, ChromaDB, API, n8n
+make healthcheck        # vérifier Qdrant, PostgreSQL, API, n8n
 
-make dev-senior         # lancer l'agent Dev Senior (local)
-make dev-senior-cloud   # lancer avec Claude API (USE_CLOUD=true)
-make biz-manager        # lancer l'agent Business Manager
+make dev-senior         # lancer l'agent Dev Senior (terminal)
+make biz-manager        # lancer l'agent Business Manager (terminal)
 make api                # lancer l'API FastAPI (port 8080)
 make n8n                # ouvrir n8n (port 5678)
 
-make index-codebase     # indexer le repo dans ChromaDB (mémoire Dev Senior)
-make models             # télécharger les modèles dans Ollama Docker
+make frontend-install   # npm install dans frontend/
+make frontend           # Vite dev server (port 5173)
+make frontend-build     # build de production
+
+make index-codebase     # indexer le repo dans Qdrant (mémoire Dev Senior)
 
 make check              # lint + mypy + pytest
 make test               # pytest seul
@@ -45,9 +48,8 @@ make lint               # ruff check
 make format             # ruff format
 make typecheck          # mypy agents/ api/ memory/ observability/
 
-make eval-quality       # éval LLM-as-judge (nécessite un fichier samples)
+make eval-quality       # éval LLM-as-judge
 make eval-drift         # comparer aux métriques baseline
-make eval-set-baseline  # définir la baseline courante
 make logs               # tail -f logs/api.log
 make install-service    # installer le service launchd (démarrage au boot)
 ```
@@ -57,6 +59,8 @@ make install-service    # installer le service launchd (démarrage au boot)
 - Python 3.11+, type hints stricts, `mypy --strict`
 - Pydantic AI pour les agents : `Agent(model=..., system_prompt=..., mcp_servers=[...])`
 - MCP servers : `FastMCP` de `mcp.server.fastmcp`, `if __name__ == "__main__": mcp.run()`
+- Sessions : asyncpg + PostgreSQL (pool dans `app.state.pool`, dépendance `get_pool(request)`)
+- Sérialisation Pydantic AI : `ModelMessagesTypeAdapter.dump_python(..., mode="json")` pour JSON
 - Tests : `TestModel` de Pydantic AI pour les smoke tests (pas d'appel réseau)
 - Pas de commentaires évidents — seulement les "pourquoi" non-triviaux
 
@@ -72,18 +76,21 @@ make install-service    # installer le service launchd (démarrage au boot)
 
 | Variable | Usage |
 |---|---|
-| `ANTHROPIC_API_KEY` | Claude API |
+| `OPENROUTER_API_KEY` | Clé OpenRouter (tous les LLMs + embeddings) |
 | `AGENTS_API_KEY` | Auth de l'API interne |
+| `DATABASE_URL` | PostgreSQL (sessions persistantes) |
+| `QDRANT_HOST` / `QDRANT_PORT` | Mémoire vectorielle |
 | `GITHUB_TOKEN` | MCP GitHub (scopes: `repo`) |
 | `GOOGLE_CREDENTIALS_FILE` | OAuth Google Workspace |
 | `CRM_API_KEY` | HubSpot Private App Token |
-| `USE_CLOUD=true` | Utiliser Claude API au lieu d'Ollama |
 | `DOCS_ENABLED=false` | Désactiver Swagger en prod |
 
 ## Décisions architecturales
 
-- **Pydantic AI** choisi pour : type-safe, multi-provider (local/cloud sans changer le code), natif Logfire
-- **Docker pour Ollama** : CPU uniquement sur Mac (pas de Metal dans Docker Desktop) — acceptable pour le PoC, native Ollama si perf insuffisante
-- **MCPServerStdio** : les MCP servers sont des sous-processus stdio → démarrés une fois au lancement de l'API via `agent.run_mcp_servers()`
-- **Sessions en mémoire** : TTL 60 min, Redis si scale nécessaire
-- **nomic-embed-text** : modèle d'embedding local via Ollama, cohérent avec la stack
+- **Pydantic AI** : type-safe, multi-provider, natif Logfire
+- **OpenRouter** : une seule clé pour tous les modèles (Qwen, Llama, embeddings)
+- **Qdrant** : base vectorielle prod-ready avec dashboard HTTP (`http://localhost:6333/dashboard`)
+- **PostgreSQL + asyncpg** : sessions persistantes avec TTL 60 min, pool de connexions géré dans le lifespan FastAPI
+- **MCPServerStdio** : MCP servers démarrés une fois au lancement via `agent.run_mcp_servers()`
+- **React + Vite** : frontend découplé, dev proxy vers l'API sur :8080, build statique pour la prod
+- **Vite proxy** : `/dev-senior` et `/biz-manager` proxifiés vers `http://localhost:8080` en dev

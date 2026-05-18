@@ -8,10 +8,8 @@ Dernière mise à jour : 2026-05-18
 
 - [x] `pyproject.toml` avec toutes les dépendances
 - [x] `.env.example` complet
-- [x] `infra/docker/docker-compose.yml` — Ollama + ChromaDB + n8n
-- [x] `infra/docker/pull-models.sh` — qwen2.5-coder, llama3.1, nomic-embed-text
-- [x] Agent Dev Senior (Pydantic AI + Ollama, switch cloud)
-- [x] Agent Business Manager (Pydantic AI + Ollama, switch cloud)
+- [x] Agent Dev Senior (Pydantic AI)
+- [x] Agent Business Manager (Pydantic AI)
 - [x] Tests de smoke via `TestModel` (sans appel réseau)
 - [x] Makefile complet
 
@@ -30,11 +28,11 @@ Dernière mise à jour : 2026-05-18
 
 ## Phase 3 — Mémoire & Observabilité ✅
 
-- [x] `memory/embeddings.py` — embed + chunk via Ollama nomic-embed-text
-- [x] `memory/store.py` — client ChromaDB partagé
-- [x] `memory/dev_senior/indexer.py` — indexation codebase CLI (incrémentale)
+- [x] `memory/embeddings.py` — embed + chunk via OpenRouter text-embedding-3-small
+- [x] `memory/store.py` — client Qdrant partagé
+- [x] `memory/dev_senior/indexer.py` — indexation codebase CLI (incrémentale, Qdrant upsert)
 - [x] `memory/dev_senior/retriever.py` — RAG (contexte injecté avant chaque requête)
-- [x] `memory/biz_manager/context.py` — mémoire contextuelle (notes, interactions)
+- [x] `memory/biz_manager/context.py` — mémoire contextuelle (notes, interactions, Qdrant)
 - [x] `observability/logfire_config.py` — Logfire + instrumentation Pydantic AI/httpx
 - [x] `observability/evals/eval_quality.py` — LLM-as-judge (Claude Haiku)
 - [x] `observability/evals/eval_drift.py` — détection de dérive vs baseline
@@ -44,17 +42,47 @@ Dernière mise à jour : 2026-05-18
 ## Phase 4 — API & Workflows n8n ✅
 
 - [x] `api/auth.py` — authentification X-API-Key
-- [x] `api/main.py` — FastAPI + CORS + lifespan (MCP servers persistants)
-- [x] `api/sessions.py` — sessions avec TTL 60 min
+- [x] `api/db.py` — pool asyncpg + `get_pool()` dépendance FastAPI
+- [x] `api/main.py` — FastAPI + CORS (port 5173 inclus) + lifespan (MCP + PostgreSQL)
+- [x] `api/sessions.py` — sessions PostgreSQL avec TTL 60 min
 - [x] `api/routes/dev_senior.py` — POST /chat, /reset, /health
 - [x] `api/routes/biz_manager.py` — POST /chat, /task (one-shot), /reset, /health
-- [x] `infra/docker/docker-compose.yml` — n8n ajouté
+- [x] `infra/docker/docker-compose.yml` — Qdrant + PostgreSQL + n8n
+- [x] `infra/deploy/init.sql` — schéma table sessions
 - [x] 5 workflows n8n (PR Review, SEO Report, Email Triage, Lead Onboarding, Contenu)
 - [x] Tous les workflows incluent le header `X-API-Key`
 
 ---
 
-## Phase 5 — Déploiement & Formation ✅
+## Phase 5 — Frontend React ✅
+
+- [x] `frontend/` — React 18 + Vite + TypeScript + Tailwind CSS
+- [x] `frontend/src/App.tsx` — layout Sidebar + ChatWindow + InputBar
+- [x] `frontend/src/api/agents.ts` — fetch API (sendChat, resetSession)
+- [x] `frontend/src/hooks/useChat.ts` — state messages + session_id + reset
+- [x] `frontend/src/components/Sidebar.tsx` — sélecteur agent (Dev Senior / Biz Manager)
+- [x] `frontend/src/components/ChatWindow.tsx` — liste messages + loading dots + erreurs
+- [x] `frontend/src/components/MessageBubble.tsx` — bulles utilisateur / agent
+- [x] `frontend/src/components/InputBar.tsx` — textarea + envoi + reset
+- [x] Vite proxy `/dev-senior` + `/biz-manager` → `http://localhost:8080`
+
+---
+
+## Phase 6 — Migration & Cohérence ✅
+
+- [x] `agents/config.py` — OpenRouter via `OpenAIModel` (remplace Ollama + Claude API)
+- [x] `memory/store.py` — client Qdrant (remplace ChromaDB)
+- [x] `memory/embeddings.py` — OpenRouter text-embedding-3-small (remplace nomic-embed-text)
+- [x] `api/sessions.py` — PostgreSQL asyncpg (remplace dict in-memory)
+- [x] `pyproject.toml` — `qdrant-client` + `asyncpg` (suppression `chromadb`)
+- [x] `.env.example` — `OPENROUTER_API_KEY`, `QDRANT_*`, `DATABASE_URL`, `POSTGRES_*`
+- [x] `infra/deploy/healthcheck.sh` — Qdrant + PostgreSQL (remplace Ollama + ChromaDB)
+- [x] `Makefile` — `make frontend`, `make frontend-build`, `make frontend-install`
+- [x] `CLAUDE.md`, `README.md`, `TODO.md` mis à jour
+
+---
+
+## Phase 7 — Déploiement ✅
 
 - [x] `docs/guide_dev_senior.md` — guide équipe technique
 - [x] `docs/guide_biz_manager.md` — guide non-tech (exemples, workflows n8n)
@@ -65,27 +93,14 @@ Dernière mise à jour : 2026-05-18
 
 ---
 
-## Cohérence & Sécurité ✅
-
-- [x] `pyproject.toml` — suppression du doublon `chromadb`, nettoyage `logfire` extras
-- [x] `.env.example` — suppression des doublons, `AGENTS_API_KEY` ajouté, avertissements sécurité
-- [x] `.gitignore` — patterns de secrets renforcés (`service_account.json`, `*.p12`, etc.)
-- [x] API protégée par `X-API-Key` sur tous les endpoints (sauf `/health`)
-- [x] CORS restreint aux origines configurées
-- [x] Swagger désactivable via `DOCS_ENABLED=false`
-- [x] Workflows n8n mis à jour avec `X-API-Key`
-- [x] `README.md`, `CLAUDE.md`, `TODO.md` mis à jour
-
----
-
 ## Reste à faire (post-lancement)
 
 - [ ] Installer le runner GitHub Actions sur le Mac mini M4
 - [ ] Lancer `make install-service` sur la machine cible
-- [ ] Remplir `.env` avec les vraies clés API
-- [ ] Télécharger `credentials.json` depuis Google Cloud Console
-- [ ] Lancer `make models` et vérifier les modèles
+- [ ] Remplir `.env` avec les vraies clés API (OPENROUTER_API_KEY, POSTGRES_PASSWORD, AGENTS_API_KEY)
+- [ ] `make docker-up` puis `make api` pour vérifier le démarrage
 - [ ] `make index-codebase` sur la codebase principale
+- [ ] `make frontend-install && make frontend` — tester l'UI
 - [ ] Définir la baseline qualité : `make eval-set-baseline`
 - [ ] Sessions de formation équipe tech (Agent Dev Senior)
 - [ ] Sessions de formation business managers / stagiaires
@@ -97,10 +112,9 @@ Dernière mise à jour : 2026-05-18
 ## Backlog v1.1
 
 - [ ] Tests d'intégration MCP (avec services réels mockés)
-- [ ] Interface web légère pour les non-tech (au lieu du terminal)
 - [ ] Mémoire multi-agent : Dev Senior et Biz Manager partagent certains contextes
-- [ ] Support MLX natif Apple Silicon (si perf Docker insuffisante)
 - [ ] Sessions Redis pour l'API (si scale nécessaire)
 - [ ] Intégration Slack/Teams pour accéder aux agents depuis le chat
 - [ ] Évaluation automatique continue (cron quotidien)
 - [ ] Dashboard métriques (latence P50/P95, taux d'erreur, qualité)
+- [ ] Build frontend statique servi par FastAPI (`/app`)

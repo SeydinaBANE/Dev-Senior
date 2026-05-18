@@ -1,23 +1,27 @@
 """
-Embeddings via Ollama (nomic-embed-text).
-Utilisé pour indexer et requêter ChromaDB.
+Embeddings via OpenRouter (text-embedding-3-small, dim=1536).
 """
 import os
 import httpx
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "openai/text-embedding-3-small")
 
 
 def embed(text: str) -> list[float]:
-    """Retourne le vecteur d'embedding d'un texte."""
+    """Retourne le vecteur d'embedding d'un texte (dim 1536)."""
     r = httpx.post(
-        f"{OLLAMA_BASE_URL}/api/embeddings",
-        json={"model": EMBED_MODEL, "prompt": text},
+        f"{OPENROUTER_BASE_URL}/embeddings",
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={"model": EMBED_MODEL, "input": text},
         timeout=60,
     )
     r.raise_for_status()
-    return r.json()["embedding"]
+    return r.json()["data"][0]["embedding"]
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:

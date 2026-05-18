@@ -3,11 +3,7 @@ Indexeur de codebase pour l'agent Dev Senior.
 
 Usage :
     python -m memory.dev_senior.indexer --path /chemin/vers/repo
-
-Indexe tous les fichiers de code source dans ChromaDB pour que
-l'agent puisse retrouver du contexte pertinent à chaque requête.
 """
-import os
 import hashlib
 from pathlib import Path
 from typing import Iterator
@@ -15,8 +11,9 @@ from typing import Iterator
 import typer
 from rich.console import Console
 from rich.progress import track
+from qdrant_client.models import PointStruct
 
-from memory.store import get_or_create_collection
+from memory.store import get_client, ensure_collection
 from memory.embeddings import embed_batch, chunk_text
 
 app = typer.Typer()
@@ -48,18 +45,25 @@ def file_hash(content: str) -> str:
     return hashlib.md5(content.encode()).hexdigest()
 
 
+def _stable_id(rel_path: str, chunk_index: int) -> int:
+    """Génère un ID entier stable à partir du chemin et du chunk."""
+    key = f"{rel_path}::chunk{chunk_index}"
+    return int(hashlib.md5(key.encode()).hexdigest(), 16) % (2**63)
+
+
 @app.command()
 def index(
     path: str = typer.Argument(".", help="Chemin du dépôt à indexer"),
     force: bool = typer.Option(False, "--force", help="Réindexer même les fichiers inchangés"),
 ) -> None:
-    """Indexe une codebase dans ChromaDB pour la mémoire de Dev Senior."""
+    """Indexe une codebase dans Qdrant pour la mémoire de Dev Senior."""
     root = Path(path).resolve()
     if not root.exists():
         console.print(f"[red]Chemin introuvable : {root}[/]")
         raise typer.Exit(1)
 
-    collection = get_or_create_collection(COLLECTION_NAME)
+    ensure_collection(COLLECTION_NAME)
+    client = get_client()
     files = list(iter_files(root))
     console.print(f"[green]{len(files)} fichiers trouvés dans {root}[/]")
 
@@ -75,26 +79,41 @@ def index(
             rel_path = str(file_path.relative_to(root))
             content_hash = file_hash(content)
 
-            # Vérifie si déjà indexé et inchangé
             if not force:
-                existing = collection.get(where={"source": rel_path})
-                if existing["ids"] and existing["metadatas"]:
-                    stored_hash = existing["metadatas"][0].get("hash", "")
-                    if stored_hash == content_hash:
-                        skipped += 1
-                        continue
-                # Supprime l'ancienne version avant réindexation
-                if existing["ids"]:
-                    collection.delete(ids=existing["ids"])
+                # Cherche si un point avec ce hash existe déjà
+                results, _ = client.scroll(
+                    collection_name=COLLECTION_NAME,
+                    scroll_filter={"must": [{"key": "source", "match": {"value": rel_path}}]},
+                    limit=1,
+                    with_payload=True,
+                )
+                if results and results[0].payload.get("hash") == content_hash:
+                    skipped += 1
+                    continue
+                # Supprime l'ancienne version
+                if results:
+                    client.delete(
+                        collection_name=COLLECTION_NAME,
+                        points_selector={"filter": {"must": [{"key": "source", "match": {"value": rel_path}}]}},
+                    )
 
             chunks = chunk_text(content)
             embeddings = embed_batch(chunks)
-            ids = [f"{rel_path}::chunk{i}" for i in range(len(chunks))]
-            metadatas = [
-                {"source": rel_path, "hash": content_hash, "chunk": i, "ext": file_path.suffix}
-                for i in range(len(chunks))
+            points = [
+                PointStruct(
+                    id=_stable_id(rel_path, i),
+                    vector=emb,
+                    payload={
+                        "source": rel_path,
+                        "hash": content_hash,
+                        "chunk": i,
+                        "ext": file_path.suffix,
+                        "text": chunk,
+                    },
+                )
+                for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
             ]
-            collection.add(ids=ids, embeddings=embeddings, documents=chunks, metadatas=metadatas)
+            client.upsert(collection_name=COLLECTION_NAME, points=points)
             indexed += 1
 
         except Exception as e:

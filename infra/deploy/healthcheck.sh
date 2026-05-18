@@ -32,22 +32,26 @@ echo ""
 
 ERRORS=0
 
-check "Ollama"    "http://localhost:11434/api/tags"        "models"  || ERRORS=$((ERRORS+1))
-check "ChromaDB"  "http://localhost:8000/api/v1/heartbeat" "nanosecond_heartbeat" || ERRORS=$((ERRORS+1))
-check "API agents" "http://localhost:8080/health"          "ok"      || ERRORS=$((ERRORS+1))
-check "n8n"       "http://localhost:5678/healthz"          ""        || ERRORS=$((ERRORS+1))
+check "Qdrant"      "http://localhost:6333/healthz"      ""    || ERRORS=$((ERRORS+1))
+check "PostgreSQL"  "http://localhost:8080/health"       "ok"  || ERRORS=$((ERRORS+1))
+check "API agents"  "http://localhost:8080/health"       "ok"  || ERRORS=$((ERRORS+1))
+check "n8n"         "http://localhost:5678/healthz"      ""    || ERRORS=$((ERRORS+1))
 
-# Vérifier les modèles Ollama
+# Vérifier PostgreSQL directement si psql est disponible
 echo ""
-echo "--- Modèles Ollama ---"
-for model in "qwen2.5-coder:7b" "llama3.1:8b" "nomic-embed-text"; do
-    if docker exec ollama ollama list 2>/dev/null | grep -q "$model"; then
-        echo -e "$OK $model"
+echo "--- PostgreSQL ---"
+if command -v psql &>/dev/null; then
+    if PGPASSWORD="${POSTGRES_PASSWORD:-change-this-password}" psql \
+        -h localhost -U "${POSTGRES_USER:-agents}" -d "${POSTGRES_DB:-agents_db}" \
+        -c "SELECT 1" &>/dev/null 2>&1; then
+        echo -e "$OK PostgreSQL (connexion directe OK)"
     else
-        echo -e "$FAIL $model manquant — lancer : make models"
+        echo -e "$FAIL PostgreSQL (connexion directe KO)"
         ERRORS=$((ERRORS+1))
     fi
-done
+else
+    echo "(psql non disponible — vérification via API uniquement)"
+fi
 
 echo ""
 if [[ $ERRORS -eq 0 ]]; then

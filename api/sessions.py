@@ -1,46 +1,52 @@
 """
-Gestion des sessions de conversation pour l'API HTTP.
-
-Stocke l'historique en mémoire (dict) avec TTL.
-Pour une vraie prod : remplacer par Redis.
+Gestion des sessions de conversation — stockage PostgreSQL (asyncpg).
 """
 import uuid
+import json
 from datetime import datetime, timezone, timedelta
-from typing import Any
+
+import asyncpg
 
 SESSION_TTL_MINUTES = 60
 
-_sessions: dict[str, dict[str, Any]] = {}
 
-
-def new_session() -> str:
+async def new_session(pool: asyncpg.Pool, agent: str) -> str:
     session_id = str(uuid.uuid4())
-    _sessions[session_id] = {"history": [], "updated_at": datetime.now(timezone.utc)}
+    await pool.execute(
+        "INSERT INTO sessions (id, agent, history) VALUES ($1, $2, $3)",
+        session_id,
+        agent,
+        "[]",
+    )
     return session_id
 
 
-def get_history(session_id: str) -> list:
-    _cleanup_expired()
-    session = _sessions.get(session_id)
-    if not session:
+async def get_history(pool: asyncpg.Pool, session_id: str) -> list:
+    await _cleanup_expired(pool)
+    row = await pool.fetchrow("SELECT history FROM sessions WHERE id = $1", session_id)
+    if not row:
         return []
-    session["updated_at"] = datetime.now(timezone.utc)
-    return session["history"]
+    await pool.execute(
+        "UPDATE sessions SET updated_at = $1 WHERE id = $2",
+        datetime.now(timezone.utc),
+        session_id,
+    )
+    return json.loads(row["history"])
 
 
-def set_history(session_id: str, history: list) -> None:
-    if session_id not in _sessions:
-        _sessions[session_id] = {}
-    _sessions[session_id]["history"] = history
-    _sessions[session_id]["updated_at"] = datetime.now(timezone.utc)
+async def set_history(pool: asyncpg.Pool, session_id: str, history: list) -> None:
+    await pool.execute(
+        "UPDATE sessions SET history = $1, updated_at = $2 WHERE id = $3",
+        json.dumps(history),
+        datetime.now(timezone.utc),
+        session_id,
+    )
 
 
-def delete_session(session_id: str) -> None:
-    _sessions.pop(session_id, None)
+async def delete_session(pool: asyncpg.Pool, session_id: str) -> None:
+    await pool.execute("DELETE FROM sessions WHERE id = $1", session_id)
 
 
-def _cleanup_expired() -> None:
+async def _cleanup_expired(pool: asyncpg.Pool) -> None:
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=SESSION_TTL_MINUTES)
-    expired = [sid for sid, s in _sessions.items() if s.get("updated_at", cutoff) < cutoff]
-    for sid in expired:
-        del _sessions[sid]
+    await pool.execute("DELETE FROM sessions WHERE updated_at < $1", cutoff)
