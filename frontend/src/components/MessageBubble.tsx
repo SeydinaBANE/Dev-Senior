@@ -24,6 +24,12 @@ export function MessageBubble({ message, agent }: Props) {
             : 'bg-gray-800 text-gray-100 rounded-bl-sm'
         }`}
       >
+        {message.attachment && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2 pb-2 border-b border-gray-600">
+            <span>📎</span>
+            <span className="truncate max-w-[200px]">{message.attachment}</span>
+          </div>
+        )}
         {message.content}
         {message.streaming && (
           <span className="inline-block w-0.5 h-4 ml-0.5 bg-gray-400 align-middle animate-pulse" />

@@ -10,7 +10,7 @@ import { useChat } from './hooks/useChat'
 export default function App() {
   const [view, setView] = useState<ViewType>('dev-senior')
   const agent: AgentType = view === 'dashboard' ? 'dev-senior' : view
-  const { messages, loading, streaming, error, send, reset } = useChat(agent)
+  const { messages, loading, streaming, uploading, error, pendingDoc, send, reset, attachFile, detachFile } = useChat(agent)
   const busy = loading || streaming
 
   return (
@@ -21,7 +21,16 @@ export default function App() {
       ) : (
         <div className="flex-1 flex flex-col min-h-0">
           <ChatWindow agent={agent} messages={messages} loading={loading} streaming={streaming} error={error} />
-          <InputBar agent={agent} loading={busy} onSend={send} onReset={reset} />
+          <InputBar
+            agent={agent}
+            loading={busy}
+            uploading={uploading}
+            pendingDoc={pendingDoc}
+            onSend={send}
+            onReset={reset}
+            onAttach={attachFile}
+            onDetach={detachFile}
+          />
         </div>
       )}
     </div>

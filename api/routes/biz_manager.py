@@ -1,7 +1,7 @@
 import json
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessagesTypeAdapter
@@ -10,6 +10,7 @@ from agents.biz_manager.agent import agent
 from memory.biz_manager.context import retrieve_context, save_interaction
 from observability.langfuse_config import get_langfuse
 from api.auth import require_api_key
+from api.file_extractor import extract_text
 from api.sessions import SessionStore
 
 router = APIRouter(prefix="/biz-manager", tags=["Business Manager"])
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/biz-manager", tags=["Business Manager"])
 class ChatRequest(BaseModel):
     message: str
     session_id: str = ""
+    document_context: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -35,6 +37,33 @@ class TaskResponse(BaseModel):
     result: str
 
 
+class UploadResponse(BaseModel):
+    filename: str
+    text: str
+    size_chars: int
+
+
+def _build_prompt(message: str, memory_context: str, document_context: str) -> str:
+    parts = []
+    if memory_context:
+        parts.append(memory_context)
+    if document_context:
+        parts.append(f"[Document joint]\n{document_context}")
+    parts.append(message)
+    return "\n\n".join(parts)
+
+
+@router.post("/upload", response_model=UploadResponse, dependencies=[Depends(require_api_key)])
+async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
+    """Extrait le texte d'un fichier. Le client renvoie ce texte dans document_context."""
+    content = await file.read()
+    try:
+        text = extract_text(file.filename or "", content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return UploadResponse(filename=file.filename or "document", text=text, size_chars=len(text))
+
+
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     """Envoie un message à l'agent Business Manager et retourne sa réponse."""
@@ -44,7 +73,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     history = ModelMessagesTypeAdapter.validate_python(history_raw) if history_raw else []
 
     memory_context = retrieve_context(req.message)
-    prompt = f"{memory_context}\n\n{req.message}" if memory_context else req.message
+    prompt = _build_prompt(req.message, memory_context, req.document_context)
 
     lf = get_langfuse()
     trace = lf.trace(
@@ -79,7 +108,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     history = ModelMessagesTypeAdapter.validate_python(history_raw) if history_raw else []
 
     memory_context = retrieve_context(req.message)
-    prompt = f"{memory_context}\n\n{req.message}" if memory_context else req.message
+    prompt = _build_prompt(req.message, memory_context, req.document_context)
 
     lf = get_langfuse()
     trace = lf.trace(
