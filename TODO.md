@@ -113,7 +113,7 @@ Dernière mise à jour : 2026-05-18
 
 - [x] Tests d'intégration MCP (avec services réels mockés)
 - [x] Mémoire multi-agent : Dev Senior et Biz Manager partagent certains contextes
-- [ ] Sessions Redis pour l'API (si scale nécessaire)
+- [x] Sessions Redis pour l'API (si scale nécessaire)
 - [x] Build frontend statique servi par FastAPI (`/app` — supprime le besoin de Vite en prod)
 - [ ] Intégration Slack/Teams pour accéder aux agents depuis le chat
 - [x] Évaluation automatique continue (cron quotidien)
