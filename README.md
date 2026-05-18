@@ -371,6 +371,7 @@ Dev-Senior/
 
 - **Équipe technique** → [`docs/guide_dev_senior.md`](docs/guide_dev_senior.md)
 - **Business managers / stagiaires** → [`docs/guide_biz_manager.md`](docs/guide_biz_manager.md)
+- **Déploiement Railway + Vercel** → [`docs/deploy_railway_vercel.md`](docs/deploy_railway_vercel.md)
 
 ---
 

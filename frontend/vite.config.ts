@@ -3,9 +3,9 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig(({ command }) => ({
   plugins: [react()],
-  // En prod, les assets sont servis sous /app par FastAPI.
-  // En dev, la base reste / pour que le proxy Vite fonctionne normalement.
-  base: command === 'build' ? '/app/' : '/',
+  // VITE_BASE_PATH override: '/' sur Vercel, '/app/' sur self-hosted (FastAPI).
+  // En dev la base est toujours '/' pour que le proxy Vite fonctionne.
+  base: command === 'build' ? (process.env.VITE_BASE_PATH ?? '/app/') : '/',
   server: {
     port: 5173,
     proxy: {
