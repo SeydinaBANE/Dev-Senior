@@ -1,0 +1,44 @@
+# Environnement
+.env
+.env.local
+.env.*.local
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Tests & qualité
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Données locales (ne pas committer les vecteurs ni les modèles)
+memory/vector_store/
+infra/docker/volumes/
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Secrets
+*.pem
+*.key
+credentials.json
+token.json

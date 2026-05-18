@@ -1,0 +1,31 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    # Note: Docker Desktop sur Mac ne donne pas accès au GPU Metal.
+    # L'inférence tourne en CPU. Pour exploiter le M4, utiliser Ollama natif.
+    # Workaround : monter /root/.ollama sur un volume nommé pour éviter
+    # de re-télécharger les modèles à chaque restart.
+
+  # Optionnel : ChromaDB pour la mémoire vectorielle
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    restart: unless-stopped
+    environment:
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenConfigServerAuthCredentialsProvider
+      - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_TOKEN:-dev-token}
+      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
+
+volumes:
+  ollama_models:
+  chroma_data:
