@@ -1,5 +1,17 @@
 # Agents IA Internes — Dev Senior & Business Manager
 
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Pydantic AI](https://img.shields.io/badge/Pydantic_AI-latest-E92063?style=flat-square&logo=pydantic&logoColor=white)](https://ai.pydantic.dev)
+[![OpenRouter](https://img.shields.io/badge/OpenRouter-API-6366F1?style=flat-square&logo=openai&logoColor=white)](https://openrouter.ai)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![Qdrant](https://img.shields.io/badge/Qdrant-vector_DB-DC382D?style=flat-square&logo=qdrant&logoColor=white)](https://qdrant.tech)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Langfuse](https://img.shields.io/badge/Langfuse-observabilité-000000?style=flat-square&logo=langfuse&logoColor=white)](https://langfuse.com)
+[![n8n](https://img.shields.io/badge/n8n-workflows-EA4B71?style=flat-square&logo=n8n&logoColor=white)](https://n8n.io)
+[![CI](https://img.shields.io/github/actions/workflow/status/SeydinaBANE/Dev-Senior/ci.yml?branch=main&style=flat-square&label=CI&logo=github)](https://github.com/SeydinaBANE/Dev-Senior/actions)
+[![License](https://img.shields.io/badge/licence-MIT-22C55E?style=flat-square)](LICENSE)
+
 Deux agents IA déployés en interne sur Mac mini M4 pour augmenter la productivité de l'équipe technique et des business managers.
 
 ---
