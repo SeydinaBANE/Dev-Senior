@@ -35,6 +35,13 @@ help:
 	@echo "    make typecheck    Vérifie les types avec mypy"
 	@echo "    make check        lint + typecheck + test"
 	@echo ""
+	@echo "  Mémoire"
+	@echo "    make index-codebase   Indexe le projet courant dans ChromaDB"
+	@echo ""
+	@echo "  Observabilité"
+	@echo "    make eval-quality     Lance une évaluation qualité (voir --help)"
+	@echo "    make eval-drift       Détecte une dérive comportementale"
+	@echo ""
 	@echo "  Divers"
 	@echo "    make clean        Supprime le venv et les caches"
 	@echo ""
@@ -104,6 +111,25 @@ typecheck:
 
 check: lint typecheck test
 	@echo "✓ Tout est propre."
+
+# ── Mémoire ──────────────────────────────────────────────────────────────────
+
+index-codebase:
+	$(VENV)/bin/python -m memory.dev_senior.indexer .
+
+index-codebase-force:
+	$(VENV)/bin/python -m memory.dev_senior.indexer . --force
+
+# ── Observabilité & Evals ────────────────────────────────────────────────────
+
+eval-quality:
+	$(VENV)/bin/python -m observability.evals.eval_quality $(ARGS)
+
+eval-drift:
+	$(VENV)/bin/python -m observability.evals.eval_drift $(ARGS)
+
+eval-set-baseline:
+	$(VENV)/bin/python -m observability.evals.eval_drift --set-baseline $(ARGS)
 
 # ── MCP Servers (tests isolés) ────────────────────────────────────────────────
 

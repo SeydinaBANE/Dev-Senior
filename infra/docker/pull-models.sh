@@ -29,6 +29,9 @@ pull_model "qwen2.5-coder:7b"
 # Agent Business Manager — modèle généraliste
 pull_model "llama3.1:8b"
 
+# Embeddings — mémoire vectorielle (Phase 3)
+pull_model "nomic-embed-text"
+
 echo ""
 echo "Modèles disponibles :"
 docker exec ollama ollama list

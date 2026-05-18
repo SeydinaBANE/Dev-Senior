@@ -21,6 +21,10 @@ dependencies = [
     "google-api-python-client>=2.130.0",
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.2.0",
+    # Mémoire
+    "chromadb>=0.5.0",
+    # Observabilité
+    "logfire[pydantic-ai,httpx]>=0.50.0",
 ]
 
 [project.optional-dependencies]
