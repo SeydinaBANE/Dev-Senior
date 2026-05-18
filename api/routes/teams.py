@@ -11,6 +11,10 @@ Routage :
   - Message commence par "@devsénior", "@dev-senior", "@devsênior" → agent Dev Senior
   - Message commence par "@bizmanager", "@biz-manager"             → agent Biz Manager
   - Sinon → agent Dev Senior par défaut
+
+Mémoire :
+  - La conversation est persistée par Teams conversation ID (session_key = teams:{conversation_id})
+  - Envoyer "reset" réinitialise la mémoire de la conversation
 """
 import base64
 import hashlib
@@ -20,6 +24,7 @@ import re
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
+from pydantic_ai.messages import ModelMessagesTypeAdapter
 
 from agents.dev_senior.agent import agent as dev_agent
 from agents.biz_manager.agent import agent as biz_agent
@@ -36,6 +41,7 @@ _BIZ_PATTERNS = re.compile(r"^@biz[- ]?manager\b", re.IGNORECASE)
 class TeamsMessage(BaseModel):
     type: str = ""
     text: str = ""
+    conversation: dict[str, str] = {}
 
 
 def _verify_signature(body: bytes, authorization: str | None) -> None:
@@ -83,9 +89,22 @@ async def teams_message(request: Request, msg: TeamsMessage) -> dict:
     agent_name, text = _parse_agent_and_text(msg.text)
     agent = dev_agent if agent_name == "dev-senior" else biz_agent
 
+    conversation_id = msg.conversation.get("id", "unknown")
+    session_key = f"teams:{conversation_id}"
+    sessions = request.app.state.sessions
+
+    if text.lower() == "reset":
+        await sessions.delete_session(session_key)
+        return {"type": "message", "text": "Mémoire de la conversation réinitialisée."}
+
+    history_raw = await sessions.get_history(session_key)
+    history = ModelMessagesTypeAdapter.validate_python(history_raw) if history_raw else []
+
     try:
-        result = await agent.run(text)
+        result = await agent.run(text, message_history=history)
         reply = result.data
+        messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
+        await sessions.set_history(session_key, messages)
     except Exception as exc:
         reply = f"Erreur agent `{agent_name}` : {exc}"
 

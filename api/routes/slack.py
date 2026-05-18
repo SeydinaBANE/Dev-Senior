@@ -12,19 +12,25 @@ Fonctionnement :
   - Slack envoie un POST form-encoded dans les 3 secondes
   - On vérifie la signature HMAC-SHA256, on renvoie un ack immédiat
   - Un BackgroundTask appelle l'agent et poste le résultat via response_url
+  - La mémoire de conversation est persistée par canal+utilisateur (session_key = slack:{channel_id}:{user_id})
+  - Envoyer "reset" réinitialise la mémoire du canal pour cet utilisateur
 """
 import hashlib
 import hmac
 import os
 import time
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 from urllib.parse import parse_qs
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
+from pydantic_ai.messages import ModelMessagesTypeAdapter
 
 from agents.dev_senior.agent import agent as dev_agent
 from agents.biz_manager.agent import agent as biz_agent
+
+if TYPE_CHECKING:
+    from api.sessions import SessionStore
 
 router = APIRouter(prefix="/slack", tags=["Slack"])
 
@@ -58,22 +64,29 @@ def _verify_signature(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Signature invalide")
 
 
-async def _run_agent_and_reply(agent_name: str, text: str, response_url: str) -> None:
-    """Appelé en background : run l'agent et poste la réponse à Slack."""
+async def _run_agent_and_reply(
+    agent_name: str,
+    text: str,
+    response_url: str,
+    sessions: "SessionStore",
+    session_key: str,
+) -> None:
+    """Appelé en background : run l'agent avec historique et poste la réponse à Slack."""
     agent = dev_agent if agent_name == "dev-senior" else biz_agent
+    history_raw = await sessions.get_history(session_key)
+    history = ModelMessagesTypeAdapter.validate_python(history_raw) if history_raw else []
     try:
-        result = await agent.run(text)
+        result = await agent.run(text, message_history=history)
         reply = result.data
+        messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
+        await sessions.set_history(session_key, messages)
     except Exception as exc:
         reply = f":warning: Erreur agent `{agent_name}` : {exc}"
 
     async with httpx.AsyncClient(timeout=10) as client:
         await client.post(
             response_url,
-            json={
-                "response_type": "in_channel",
-                "text": reply,
-            },
+            json={"response_type": "in_channel", "text": reply},
         )
 
 
@@ -92,21 +105,31 @@ async def slack_command(
     # Parser le form-encoded body manuellement
     fields = parse_qs(body.decode(), keep_blank_values=True)
     command = fields.get("command", [""])[0]
-    text = fields.get("text", [""])[0]
+    text = fields.get("text", [""])[0].strip()
     response_url = fields.get("response_url", [""])[0]
     user_name = fields.get("user_name", [""])[0]
+    channel_id = fields.get("channel_id", ["unknown"])[0]
+    user_id = fields.get("user_id", ["unknown"])[0]
+    session_key = f"slack:{channel_id}:{user_id}"
 
-    if not text.strip():
+    if not text:
         return {"response_type": "ephemeral", "text": "Usage : `/dev-senior <message>`"}
 
     agent_name = "dev-senior" if command == "/dev-senior" else "biz-manager"
+    sessions = request.app.state.sessions
+
+    if text.lower() == "reset":
+        await sessions.delete_session(session_key)
+        return {"response_type": "ephemeral", "text": ":recycle: Mémoire de la conversation réinitialisée."}
 
     # Ack immédiat pour respecter le délai 3s de Slack
-    background_tasks.add_task(_run_agent_and_reply, agent_name, text.strip(), response_url)
+    background_tasks.add_task(
+        _run_agent_and_reply, agent_name, text, response_url, sessions, session_key
+    )
 
     return {
         "response_type": "in_channel",
-        "text": f":hourglass: `{user_name}` → _{text.strip()}_ — réponse en cours…",
+        "text": f":hourglass: `{user_name}` → _{text}_ — réponse en cours…",
     }
 
 

@@ -127,7 +127,8 @@ async def test_postgres_set_history(pg_store: PostgresSessionStore, pg_pool: Mag
     await pg_store.set_history("some-id", history)
     pg_pool.execute.assert_awaited_once()
     call_sql = pg_pool.execute.call_args[0][0]
-    assert "UPDATE sessions" in call_sql
+    assert "INSERT INTO sessions" in call_sql
+    assert "ON CONFLICT" in call_sql
 
 
 @pytest.mark.asyncio
