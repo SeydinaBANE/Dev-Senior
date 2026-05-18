@@ -7,7 +7,7 @@ PYTEST := $(VENV)/bin/pytest
 MYPY := $(VENV)/bin/mypy
 RUFF := $(VENV)/bin/ruff
 
-.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install
+.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install serve-prod
 
 # ── Aide ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +41,7 @@ help:
 	@echo ""
 	@echo "  API & n8n"
 	@echo "    make api                Démarre l'API HTTP agents (port 8080)"
+	@echo "    make serve-prod         Build frontend + démarre l'API (prod, port 8080)"
 	@echo "    make n8n                Ouvre n8n dans le navigateur"
 	@echo ""
 	@echo "  Mémoire"
@@ -135,6 +136,8 @@ api:
 
 api-prod:
 	$(VENV)/bin/uvicorn api.main:app --host 0.0.0.0 --port $${PORT:-8080} --workers 2
+
+serve-prod: frontend-build api-prod
 
 n8n:
 	open http://localhost:5678

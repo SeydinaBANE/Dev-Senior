@@ -17,10 +17,12 @@ Sécurité :
 """
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from observability.langfuse_config import configure_observability, flush as langfuse_flush
 from agents.dev_senior.agent import agent as dev_agent
@@ -65,6 +67,13 @@ app.add_middleware(
 
 app.include_router(dev_router)
 app.include_router(biz_router)
+
+# Frontend statique — monté en dernier pour ne pas masquer les routes API.
+# En prod : `make serve-prod` build le frontend puis démarre l'API.
+# Accessible sur http://localhost:8080/app
+_FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+if _FRONTEND_DIST.exists():
+    app.mount("/app", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")
 
 
 @app.get("/health", tags=["Infra"])
