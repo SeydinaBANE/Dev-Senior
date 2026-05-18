@@ -105,6 +105,26 @@ typecheck:
 check: lint typecheck test
 	@echo "✓ Tout est propre."
 
+# ── MCP Servers (tests isolés) ────────────────────────────────────────────────
+
+test-github:
+	$(PYTEST) tests/mcp_servers/test_github.py -v
+
+test-mcp:
+	$(PYTEST) tests/mcp_servers/ -v
+
+mcp-github:
+	$(VENV)/bin/python -m mcp_servers.github.server
+
+mcp-google:
+	$(VENV)/bin/python -m mcp_servers.google_workspace.server
+
+mcp-crm:
+	$(VENV)/bin/python -m mcp_servers.crm.server
+
+mcp-seo:
+	$(VENV)/bin/python -m mcp_servers.seo.server
+
 # ── Divers ───────────────────────────────────────────────────────────────────
 
 clean:

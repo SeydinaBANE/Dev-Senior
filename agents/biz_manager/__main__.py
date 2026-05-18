@@ -10,18 +10,19 @@ console = Console()
 
 async def chat_loop() -> None:
     console.print("[bold blue]Business Manager[/] — prêt. Tape 'exit' pour quitter.\n")
-    history: list[dict[str, str]] = []
+    history: list = []
 
-    while True:
-        user_input = Prompt.ask("[bold cyan]Toi[/]")
-        if user_input.lower() in ("exit", "quit"):
-            break
+    async with agent.run_mcp_servers():
+        while True:
+            user_input = Prompt.ask("[bold cyan]Toi[/]")
+            if user_input.lower() in ("exit", "quit"):
+                break
 
-        with console.status("Réflexion..."):
-            result = await agent.run(user_input, message_history=history)
+            with console.status("Réflexion..."):
+                result = await agent.run(user_input, message_history=history)
 
-        console.print(f"\n[bold blue]Business Manager[/]\n{result.data}\n")
-        history = result.all_messages()
+            console.print(f"\n[bold blue]Business Manager[/]\n{result.data}\n")
+            history = result.all_messages()
 
 
 @app.command()
