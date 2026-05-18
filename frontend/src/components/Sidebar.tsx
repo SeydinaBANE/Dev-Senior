@@ -1,8 +1,10 @@
 import type { AgentType } from '../api/agents'
 
+export type ViewType = AgentType | 'dashboard'
+
 interface Props {
-  active: AgentType
-  onChange: (agent: AgentType) => void
+  active: ViewType
+  onChange: (view: ViewType) => void
 }
 
 const agents: { id: AgentType; label: string; desc: string; icon: string; color: string }[] = [
@@ -53,8 +55,22 @@ export function Sidebar({ active, onChange }: Props) {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-800">
-        <p className="text-xs text-gray-600">Propulsé par OpenRouter</p>
+      <div className="p-3 border-t border-gray-800">
+        <button
+          onClick={() => onChange('dashboard')}
+          className={`w-full text-left rounded-xl p-3 transition-all ${
+            active === 'dashboard'
+              ? 'bg-indigo-700 text-white'
+              : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">📈</span>
+            <span className="font-medium text-sm">Dashboard</span>
+          </div>
+          <p className="text-xs opacity-75 leading-tight">Métriques & qualité</p>
+        </button>
+        <p className="text-xs text-gray-600 mt-3 px-1">Propulsé par OpenRouter</p>
       </div>
     </aside>
   )
