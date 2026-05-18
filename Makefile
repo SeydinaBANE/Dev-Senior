@@ -46,8 +46,15 @@ help:
 	@echo "    make eval-quality     Lance une évaluation qualité (voir --help)"
 	@echo "    make eval-drift       Détecte une dérive comportementale"
 	@echo ""
+	@echo "  Déploiement"
+	@echo "    make start        Démarre tout l'environnement"
+	@echo "    make stop         Arrête tous les services"
+	@echo "    make healthcheck  Vérifie l'état de tous les services"
+	@echo "    make install-service  Installe le service launchd (une fois)"
+	@echo ""
 	@echo "  Divers"
 	@echo "    make clean        Supprime le venv et les caches"
+	@echo "    make logs         Affiche les logs de l'API"
 	@echo ""
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -165,6 +172,29 @@ mcp-crm:
 
 mcp-seo:
 	$(VENV)/bin/python -m mcp_servers.seo.server
+
+# ── Déploiement ──────────────────────────────────────────────────────────────
+
+start:
+	@chmod +x infra/deploy/start.sh && bash infra/deploy/start.sh
+
+stop:
+	@chmod +x infra/deploy/stop.sh && bash infra/deploy/stop.sh
+
+healthcheck:
+	@chmod +x infra/deploy/healthcheck.sh && bash infra/deploy/healthcheck.sh
+
+install-service:
+	@chmod +x infra/deploy/install_launchd.sh && bash infra/deploy/install_launchd.sh
+
+logs:
+	@tail -f logs/api.log
+
+logs-error:
+	@tail -f logs/api-error.log
+
+deploy: check install
+	@echo "Déploiement terminé. Lance 'make start' pour démarrer."
 
 # ── Divers ───────────────────────────────────────────────────────────────────
 

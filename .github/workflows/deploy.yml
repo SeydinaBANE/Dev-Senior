@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "workflows/n8n/**"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement cible"
+        required: true
+        default: "production"
+        type: choice
+        options: [production, staging]
+
+jobs:
+  deploy:
+    name: Déployer sur Mac mini M4
+    runs-on: self-hosted  # runner installé sur le Mac mini
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier que les tests passent
+        run: make check
+
+      - name: Mettre à jour les dépendances
+        run: pip install -e ".[dev]"
+
+      - name: Indexer la codebase (mémoire Dev Senior)
+        run: make index-codebase
+        continue-on-error: true  # non bloquant si ChromaDB est down
+
+      - name: Redémarrer l'API agents
+        run: |
+          launchctl unload ~/Library/LaunchAgents/com.agents.api.plist 2>/dev/null || true
+          launchctl load ~/Library/LaunchAgents/com.agents.api.plist
+
+      - name: Health check post-déploiement
+        run: |
+          sleep 5
+          bash infra/deploy/healthcheck.sh
+
+      - name: Notifier en cas d'échec
+        if: failure()
+        run: |
+          echo "::error::Déploiement échoué — relancer manuellement avec : make deploy"

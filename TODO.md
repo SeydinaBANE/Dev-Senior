@@ -78,12 +78,16 @@ Objectif : automatiser les workflows business via l'agent Biz Manager.
 
 Objectif : mise en production et adoption par les équipes.
 
-- [ ] Documentation utilisateur pour l'équipe tech (agent Dev Senior)
-- [ ] Documentation utilisateur pour les stagiaires (agent Biz Manager)
+- [x] Documentation utilisateur pour l'équipe tech (`docs/guide_dev_senior.md`)
+- [x] Documentation utilisateur pour les stagiaires (`docs/guide_biz_manager.md`)
+- [x] CI/CD GitHub Actions (lint + types + tests + scan secrets)
+- [x] Pipeline de déploiement sur runner self-hosted Mac mini M4
+- [x] Scripts de démarrage/arrêt (`infra/deploy/start.sh`, `stop.sh`)
+- [x] Health check automatisé (`infra/deploy/healthcheck.sh`)
+- [x] Service launchd pour l'API (redémarrage automatique au boot)
+- [ ] Installer le runner GitHub Actions sur le Mac mini M4
+- [ ] Configurer `make install-service` sur la machine cible
 - [ ] Sessions de formation (équipe tech + business managers)
-- [ ] Mise en place du CI/CD (tests automatiques sur chaque push)
-- [ ] Déploiement sur Mac mini M4 (service systemd ou Docker)
-- [ ] Dashboard de monitoring (métriques, alertes)
 - [ ] Recueil des premiers retours utilisateurs
 - [ ] Backlog d'itérations v1.1
 

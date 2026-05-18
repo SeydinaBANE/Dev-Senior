@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.agents.api</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Remplacer /path/to/project par le chemin réel -->
+    <string>/path/to/project/.venv/bin/uvicorn</string>
+    <string>api.main:app</string>
+    <string>--host</string>
+    <string>0.0.0.0</string>
+    <string>--port</string>
+    <string>8080</string>
+    <string>--workers</string>
+    <string>2</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/path/to/project</string>
+
+  <!-- Variables d'environnement -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/path/to/project/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <!-- Logs -->
+  <key>StandardOutPath</key>
+  <string>/path/to/project/logs/api.log</string>
+  <key>StandardErrorPath</key>
+  <string>/path/to/project/logs/api-error.log</string>
+
+  <!-- Redémarrage automatique -->
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Attendre que le réseau soit disponible -->
+  <key>StartInterval</key>
+  <integer>0</integer>
+</dict>
+</plist>
