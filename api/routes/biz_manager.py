@@ -1,4 +1,8 @@
+import json
+from collections.abc import AsyncGenerator
+
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
@@ -64,6 +68,55 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     save_interaction(req.message, response)
 
     return ChatResponse(response=response, session_id=session_id)
+
+
+@router.post("/chat/stream", dependencies=[Depends(require_api_key)])
+async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
+    """SSE : stream token-par-token la réponse de l'agent Business Manager."""
+    sessions: SessionStore = request.app.state.sessions
+    session_id = req.session_id or await sessions.new_session("biz-manager")
+    history_raw = await sessions.get_history(session_id)
+    history = ModelMessagesTypeAdapter.validate_python(history_raw) if history_raw else []
+
+    memory_context = retrieve_context(req.message)
+    prompt = f"{memory_context}\n\n{req.message}" if memory_context else req.message
+
+    lf = get_langfuse()
+    trace = lf.trace(
+        name="biz-manager-chat-stream",
+        session_id=session_id,
+        input={"message": req.message},
+        metadata={"agent": "biz-manager", "streaming": True},
+    ) if lf else None
+
+    async def generate() -> AsyncGenerator[str, None]:
+        yield f"event: session\ndata: {session_id}\n\n"
+        chunks: list[str] = []
+        try:
+            async with agent.run_stream(prompt, message_history=history) as result:
+                async for delta in result.stream_text(delta=True):
+                    chunks.append(delta)
+                    yield f"data: {json.dumps(delta)}\n\n"
+                messages = ModelMessagesTypeAdapter.dump_python(
+                    result.all_messages(), mode="json"
+                )
+                await sessions.set_history(session_id, messages)
+            response_text = "".join(chunks)
+            save_interaction(req.message, response_text)
+            if trace:
+                try:
+                    trace.update(output={"response": response_text})
+                except Exception:
+                    pass
+        except Exception as exc:
+            yield f"event: error\ndata: {json.dumps(str(exc))}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/task", response_model=TaskResponse, dependencies=[Depends(require_api_key)])

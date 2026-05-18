@@ -25,9 +25,14 @@ export function MessageBubble({ message, agent }: Props) {
         }`}
       >
         {message.content}
-        <div className="text-xs text-gray-500 mt-1">
-          {message.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-        </div>
+        {message.streaming && (
+          <span className="inline-block w-0.5 h-4 ml-0.5 bg-gray-400 align-middle animate-pulse" />
+        )}
+        {!message.streaming && (
+          <div className="text-xs text-gray-500 mt-1">
+            {message.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        )}
       </div>
       {isUser && (
         <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-xs ml-2 mt-1 shrink-0">

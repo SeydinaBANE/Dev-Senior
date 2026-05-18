@@ -6,7 +6,8 @@ import { MessageBubble } from './MessageBubble'
 interface Props {
   agent: AgentType
   messages: Message[]
-  loading: boolean
+  loading: boolean    // attente du 1er token
+  streaming: boolean  // tokens en cours (bulle visible)
   error: string | null
 }
 
@@ -21,12 +22,12 @@ const WELCOME: Record<AgentType, { title: string; subtitle: string }> = {
   },
 }
 
-export function ChatWindow({ agent, messages, loading, error }: Props) {
+export function ChatWindow({ agent, messages, loading, streaming, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, loading, streaming])
 
   const { title, subtitle } = WELCOME[agent]
 
@@ -44,7 +45,8 @@ export function ChatWindow({ agent, messages, loading, error }: Props) {
         <MessageBubble key={m.id} message={m} agent={agent} />
       ))}
 
-      {loading && (
+      {/* Dots "thinking" : uniquement pendant l'attente du 1er token */}
+      {loading && !streaming && (
         <div className="flex justify-start mb-3">
           <div className="bg-gray-800 rounded-2xl rounded-bl-sm px-4 py-3">
             <span className="inline-flex gap-1">

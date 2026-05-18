@@ -15,12 +15,17 @@ export interface ChatResponse {
   session_id: string
 }
 
-export async function sendChat(
+export type StreamChunk =
+  | { type: 'session'; sessionId: string }
+  | { type: 'chunk'; text: string }
+  | { type: 'done' }
+
+export async function* sendChatStream(
   agent: AgentType,
   message: string,
-  sessionId: string
-): Promise<ChatResponse> {
-  const res = await fetch(`${API_BASE}/${agent}/chat`, {
+  sessionId: string,
+): AsyncGenerator<StreamChunk> {
+  const res = await fetch(`${API_BASE}/${agent}/chat/stream`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ message, session_id: sessionId }),
@@ -29,7 +34,46 @@ export async function sendChat(
     const err = await res.text()
     throw new Error(err || `HTTP ${res.status}`)
   }
-  return res.json()
+  if (!res.body) throw new Error('No response body')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      // SSE events are separated by double newlines
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() ?? ''
+
+      for (const part of parts) {
+        let eventType = 'message'
+        let data = ''
+        for (const line of part.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+          else if (line.startsWith('data: ')) data = line.slice(6)
+        }
+        if (!data) continue
+
+        if (eventType === 'session') {
+          yield { type: 'session', sessionId: data }
+        } else if (eventType === 'error') {
+          throw new Error(JSON.parse(data) as string)
+        } else if (data === '[DONE]') {
+          yield { type: 'done' }
+          return
+        } else {
+          yield { type: 'chunk', text: JSON.parse(data) as string }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }
 
 export async function resetSession(agent: AgentType, sessionId: string): Promise<void> {
