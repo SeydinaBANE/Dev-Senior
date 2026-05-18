@@ -28,6 +28,21 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   n8n:
     image: n8nio/n8n:latest
     container_name: n8n
@@ -52,4 +67,5 @@ services:
 volumes:
   qdrant_data:
   postgres_data:
+  redis_data:
   n8n_data:

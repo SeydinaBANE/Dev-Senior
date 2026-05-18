@@ -25,6 +25,7 @@ dependencies = [
     "qdrant-client>=1.9.0",
     # Sessions persistantes
     "asyncpg>=0.29.0",
+    "redis[asyncio]>=5.0.0",
     # Observabilité
     "langfuse>=2.0.0",
     # API HTTP (pour n8n + frontend statique)
