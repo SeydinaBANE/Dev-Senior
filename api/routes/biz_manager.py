@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends
+import asyncpg
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
+from pydantic_ai.messages import ModelMessagesTypeAdapter
+
 from agents.biz_manager.agent import agent
 from memory.biz_manager.context import retrieve_context, save_interaction
 from api.auth import require_api_key
+from api.db import get_pool
 from api.sessions import new_session, get_history, set_history, delete_session
 
 router = APIRouter(prefix="/biz-manager", tags=["Business Manager"])
@@ -29,10 +33,12 @@ class TaskResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
-async def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     """Envoie un message à l'agent Business Manager et retourne sa réponse."""
-    session_id = req.session_id or new_session()
-    history = get_history(session_id)
+    pool: asyncpg.Pool = get_pool(request)
+    session_id = req.session_id or await new_session(pool, "biz-manager")
+    history_raw = await get_history(pool, session_id)
+    history = ModelMessagesTypeAdapter.validate_python(history_raw) if history_raw else []
 
     memory_context = retrieve_context(req.message)
     prompt = f"{memory_context}\n\n{req.message}" if memory_context else req.message
@@ -40,7 +46,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
     result = await agent.run(prompt, message_history=history)
     response = result.data
 
-    set_history(session_id, result.all_messages())
+    messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
+    await set_history(pool, session_id, messages)
     save_interaction(req.message, response)
 
     return ChatResponse(response=response, session_id=session_id)
@@ -48,10 +55,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
 @router.post("/task", response_model=TaskResponse, dependencies=[Depends(require_api_key)])
 async def run_task(req: TaskRequest) -> TaskResponse:
-    """
-    Exécution one-shot pour les workflows n8n (sans historique de session).
-    Idéal pour : génération de contenu, analyse, rédaction automatisée.
-    """
+    """Exécution one-shot pour les workflows n8n (sans historique de session)."""
     prompt = f"{req.context}\n\n{req.task}" if req.context else req.task
     result = await agent.run(prompt)
     save_interaction(req.task, result.data)
@@ -59,8 +63,9 @@ async def run_task(req: TaskRequest) -> TaskResponse:
 
 
 @router.post("/reset/{session_id}", dependencies=[Depends(require_api_key)])
-async def reset_session(session_id: str) -> dict:
-    delete_session(session_id)
+async def reset_session(session_id: str, request: Request) -> dict:
+    pool: asyncpg.Pool = get_pool(request)
+    await delete_session(pool, session_id)
     return {"status": "ok", "session_id": session_id}
 
 

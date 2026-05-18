@@ -7,7 +7,7 @@ PYTEST := $(VENV)/bin/pytest
 MYPY := $(VENV)/bin/mypy
 RUFF := $(VENV)/bin/ruff
 
-.PHONY: help setup install dev docker-up docker-down models dev-senior biz-manager test lint typecheck format clean
+.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install
 
 # ── Aide ─────────────────────────────────────────────────────────────────────
 
@@ -16,52 +16,57 @@ help:
 	@echo "  Dev Senior & Business Manager — Commandes disponibles"
 	@echo ""
 	@echo "  Setup"
-	@echo "    make setup        Crée le venv et installe toutes les dépendances"
-	@echo "    make install      Installe uniquement les dépendances (venv existant)"
+	@echo "    make setup              Crée le venv et installe toutes les dépendances"
+	@echo "    make install            Installe uniquement les dépendances (venv existant)"
 	@echo ""
 	@echo "  Docker"
-	@echo "    make docker-up    Démarre Ollama + ChromaDB"
-	@echo "    make docker-down  Arrête les containers"
-	@echo "    make models       Télécharge les modèles LLM dans Ollama"
+	@echo "    make docker-up          Démarre Qdrant + PostgreSQL + n8n"
+	@echo "    make docker-down        Arrête les containers"
 	@echo ""
 	@echo "  Agents"
-	@echo "    make dev-senior   Lance l'agent Dev Senior (chat)"
-	@echo "    make biz-manager  Lance l'agent Business Manager (chat)"
+	@echo "    make dev-senior         Lance l'agent Dev Senior (terminal)"
+	@echo "    make biz-manager        Lance l'agent Business Manager (terminal)"
+	@echo ""
+	@echo "  Frontend React"
+	@echo "    make frontend-install   Installe les dépendances npm"
+	@echo "    make frontend           Lance le dev server Vite (port 5173)"
+	@echo "    make frontend-build     Build de production"
 	@echo ""
 	@echo "  Qualité"
-	@echo "    make test         Lance tous les tests"
-	@echo "    make lint         Vérifie le style avec ruff"
-	@echo "    make format       Formate le code avec ruff"
-	@echo "    make typecheck    Vérifie les types avec mypy"
-	@echo "    make check        lint + typecheck + test"
+	@echo "    make test               Lance tous les tests"
+	@echo "    make lint               Vérifie le style avec ruff"
+	@echo "    make format             Formate le code avec ruff"
+	@echo "    make typecheck          Vérifie les types avec mypy"
+	@echo "    make check              lint + typecheck + test"
 	@echo ""
 	@echo "  API & n8n"
-	@echo "    make api          Démarre l'API HTTP agents (port 8080)"
-	@echo "    make n8n          Ouvre n8n dans le navigateur"
+	@echo "    make api                Démarre l'API HTTP agents (port 8080)"
+	@echo "    make n8n                Ouvre n8n dans le navigateur"
 	@echo ""
 	@echo "  Mémoire"
-	@echo "    make index-codebase   Indexe le projet courant dans ChromaDB"
+	@echo "    make index-codebase     Indexe le projet courant dans Qdrant"
+	@echo "    make index-codebase-force   Réindexe intégralement"
 	@echo ""
 	@echo "  Observabilité"
-	@echo "    make eval-quality     Lance une évaluation qualité (voir --help)"
-	@echo "    make eval-drift       Détecte une dérive comportementale"
+	@echo "    make eval-quality       Lance une évaluation qualité"
+	@echo "    make eval-drift         Détecte une dérive comportementale"
 	@echo ""
 	@echo "  Déploiement"
-	@echo "    make start        Démarre tout l'environnement"
-	@echo "    make stop         Arrête tous les services"
-	@echo "    make healthcheck  Vérifie l'état de tous les services"
-	@echo "    make install-service  Installe le service launchd (une fois)"
+	@echo "    make start              Démarre tout l'environnement"
+	@echo "    make stop               Arrête tous les services"
+	@echo "    make healthcheck        Vérifie l'état de tous les services"
+	@echo "    make install-service    Installe le service launchd (une fois)"
 	@echo ""
 	@echo "  Divers"
-	@echo "    make clean        Supprime le venv et les caches"
-	@echo "    make logs         Affiche les logs de l'API"
+	@echo "    make clean              Supprime le venv et les caches"
+	@echo "    make logs               Affiche les logs de l'API"
 	@echo ""
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
 setup: $(VENV)/bin/activate install
 	@$(VENV)/bin/pre-commit install
-	@echo "✓ Projet prêt. Copie .env.example → .env et remplis tes clés API."
+	@echo "✓ Projet prêt. Copie .env.example → .env et remplis ta clé OPENROUTER_API_KEY."
 
 $(VENV)/bin/activate:
 	$(PYTHON) -m venv $(VENV)
@@ -75,17 +80,13 @@ install: $(VENV)/bin/activate
 
 docker-up:
 	docker compose -f infra/docker/docker-compose.yml up -d
-	@echo "✓ Ollama sur http://localhost:11434 | ChromaDB sur http://localhost:8000"
+	@echo "✓ Qdrant sur http://localhost:6333 | PostgreSQL sur localhost:5432 | n8n sur http://localhost:5678"
 
 docker-down:
 	docker compose -f infra/docker/docker-compose.yml down
 
 docker-logs:
 	docker compose -f infra/docker/docker-compose.yml logs -f
-
-models:
-	@chmod +x infra/docker/pull-models.sh
-	@infra/docker/pull-models.sh
 
 # ── Agents ───────────────────────────────────────────────────────────────────
 
@@ -95,12 +96,16 @@ dev-senior:
 biz-manager:
 	$(VENV)/bin/python -m agents.biz_manager
 
-# Mode cloud (Claude API au lieu d'Ollama)
-dev-senior-cloud:
-	USE_CLOUD=true $(VENV)/bin/python -m agents.dev_senior
+# ── Frontend React ────────────────────────────────────────────────────────────
 
-biz-manager-cloud:
-	USE_CLOUD=true $(VENV)/bin/python -m agents.biz_manager
+frontend-install:
+	cd frontend && npm install
+
+frontend:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
 
 # ── Qualité ──────────────────────────────────────────────────────────────────
 

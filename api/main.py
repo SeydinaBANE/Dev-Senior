@@ -1,9 +1,8 @@
 """
-API HTTP — expose les deux agents pour les workflows n8n.
+API HTTP — expose les deux agents pour les workflows n8n et le frontend React.
 
 Démarrage :
     make api                    # port 8080 par défaut
-    make api PORT=9000          # port custom
 
 Endpoints :
     POST /dev-senior/chat       → agent Dev Senior (avec session)
@@ -27,33 +26,34 @@ from fastapi.middleware.cors import CORSMiddleware
 from observability.logfire_config import configure_logfire
 from agents.dev_senior.agent import agent as dev_agent
 from agents.biz_manager.agent import agent as biz_agent
+from api.db import create_pool
 from api.routes.dev_senior import router as dev_router
 from api.routes.biz_manager import router as biz_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Lance les MCP servers une fois au démarrage, les arrête proprement."""
     configure_logfire("agents-api")
+    app.state.pool = await create_pool()
     async with dev_agent.run_mcp_servers():
         async with biz_agent.run_mcp_servers():
             yield
+    await app.state.pool.close()
 
 
 app = FastAPI(
     title="Agents IA — API interne",
     description="API REST pour les agents Dev Senior et Business Manager",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
-    # Désactiver la doc publique en prod (mettre DOCS_ENABLED=false dans .env)
     docs_url="/docs" if os.getenv("DOCS_ENABLED", "true").lower() != "false" else None,
     redoc_url=None,
 )
 
-# CORS — restreint aux origines connues (n8n + dev local)
+# CORS — inclut le frontend React (port 5173) + n8n (5678) + dev local
 _cors_origins = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:5678,http://localhost:3000,http://127.0.0.1:5678",
+    "http://localhost:5173,http://localhost:5678,http://localhost:3000,http://127.0.0.1:5678",
 ).split(",")
 
 app.add_middleware(

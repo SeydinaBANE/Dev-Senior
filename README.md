@@ -8,19 +8,19 @@ Deux agents IA déployés en interne sur Mac mini M4 pour augmenter la productiv
 
 ```bash
 # 1. Setup (une seule fois)
-cp .env.example .env        # remplir les clés
+cp .env.example .env        # remplir OPENROUTER_API_KEY + POSTGRES_PASSWORD
 make setup                  # venv + deps + pre-commit
 
 # 2. Démarrer tout l'environnement
-make start                  # Docker (Ollama + ChromaDB + n8n) + API agents
+make docker-up              # Qdrant + PostgreSQL + n8n
+make api                    # FastAPI port 8080
 
-# 3. Vérifier que tout tourne
+# 3. Ouvrir le frontend
+make frontend-install       # npm install (une seule fois)
+make frontend               # Vite dev server → http://localhost:5173
+
+# 4. Vérifier que tout tourne
 make healthcheck
-
-# 4. Utiliser les agents
-make dev-senior             # terminal — agent technique
-make biz-manager            # terminal — agent business
-# ou ouvrir http://localhost:5678 pour les workflows n8n
 ```
 
 ---
@@ -28,16 +28,16 @@ make biz-manager            # terminal — agent business
 ## Les deux agents
 
 ### Agent Dev Senior
-**Utilisateurs :** équipe technique  
-**Capacités :** développement complexe, architecture, debugging, code reviews, refactoring, documentation  
-**Modèle :** `qwen2.5-coder:7b` via Ollama (local) · `claude-sonnet-4-6` (cloud)  
-**Mémoire :** RAG sur la codebase indexée dans ChromaDB
+**Utilisateurs :** équipe technique
+**Capacités :** développement complexe, architecture, debugging, code reviews, refactoring, documentation
+**Modèle :** `qwen/qwen-2.5-coder-7b-instruct` via OpenRouter
+**Mémoire :** RAG sur la codebase indexée dans Qdrant
 
 ### Agent Business Manager
-**Utilisateurs :** business managers, stagiaires  
-**Capacités :** marketing digital, SEO, réseaux sociaux, contenu, emails, CRM, automatisation  
-**Modèle :** `llama3.1:8b` via Ollama (local) · `claude-sonnet-4-6` (cloud)  
-**Mémoire :** historique des interactions mémorisé automatiquement
+**Utilisateurs :** business managers, stagiaires
+**Capacités :** marketing digital, SEO, réseaux sociaux, contenu, emails, CRM, automatisation
+**Modèle :** `meta-llama/llama-3.1-8b-instruct` via OpenRouter
+**Mémoire :** historique des interactions mémorisé automatiquement dans Qdrant
 
 ---
 
@@ -45,10 +45,21 @@ make biz-manager            # terminal — agent business
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│               React Frontend (Vite, port 5173)              │
+│         Dev Senior (vert) │ Business Manager (bleu)         │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTP (proxy Vite en dev)
+┌────────────────────────▼────────────────────────────────────┐
+│         FastAPI (port 8080) — API interne sécurisée         │
+│              Auth : X-API-Key · CORS : localhost             │
+│              Sessions : asyncpg → PostgreSQL                │
+└──────────┬──────────────────────────────────────────────────┘
+           │ Pydantic AI
+┌──────────▼──────────────────────────────────────────────────┐
 │                   Agents (Pydantic AI)                      │
 │  ┌────────────────────┐       ┌───────────────────────┐     │
 │  │    Dev Senior      │       │   Business Manager    │     │
-│  │  qwen2.5-coder:7b  │       │    llama3.1:8b        │     │
+│  │ qwen-2.5-coder:7b  │       │   llama-3.1-8b        │     │
 │  └────────┬───────────┘       └──────────┬────────────┘     │
 └───────────┼──────────────────────────────┼──────────────────┘
             │             MCP              │
@@ -58,19 +69,14 @@ make biz-manager            # terminal — agent business
 └──────────────────────────────────────────────────────────────┘
             │
 ┌───────────▼──────────────────────────────────────────────────┐
-│          FastAPI (port 8080) — API interne sécurisée         │
-│              Auth : X-API-Key · CORS : localhost             │
-└──────────────────────┬───────────────────────────────────────┘
-                       │
-┌──────────────────────▼───────────────────────────────────────┐
-│                  n8n (port 5678)                             │
-│   PR Review · SEO Report · Email Triage · Lead · Contenu    │
+│                  OpenRouter API                              │
+│   Modèles : Qwen · Llama · text-embedding-3-small           │
 └──────────────────────────────────────────────────────────────┘
             │
 ┌───────────▼──────────────────────────────────────────────────┐
-│          Inférence locale — Mac mini M4 (Docker)            │
-│     Ollama (port 11434) · ChromaDB (port 8000)              │
-│     Modèles : qwen2.5-coder · llama3.1 · nomic-embed-text   │
+│          Infrastructure Docker (Mac mini M4)                 │
+│     Qdrant (port 6333) · PostgreSQL (port 5432)             │
+│     n8n (port 5678)                                         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -81,13 +87,13 @@ make biz-manager            # terminal — agent business
 | Composant | Technologie |
 |---|---|
 | Orchestration agents | Pydantic AI |
-| LLMs cloud | Claude API (Anthropic) |
-| LLMs locaux | Ollama via Docker |
+| LLMs + Embeddings | OpenRouter (une seule clé) |
 | Intégrations | MCP (serveurs custom) |
-| Mémoire vectorielle | ChromaDB (Docker) |
-| Embeddings | nomic-embed-text (Ollama) |
+| Mémoire vectorielle | Qdrant (Docker) |
+| Sessions persistantes | PostgreSQL + asyncpg |
 | Observabilité | Logfire |
 | API interne | FastAPI + uvicorn |
+| Frontend | React 18 + Vite + TypeScript + Tailwind |
 | Automatisation | n8n (Docker) |
 | Infra | Docker Compose, Git, GitHub Actions |
 
@@ -98,28 +104,28 @@ make biz-manager            # terminal — agent business
 ```bash
 # Setup & déploiement
 make setup              # venv + deps + pre-commit (première fois)
+make docker-up          # démarrer Qdrant + PostgreSQL + n8n
+make docker-down        # arrêter les containers
 make start              # démarre tout l'environnement
 make stop               # arrêt propre
-make healthcheck        # vérifie Ollama, ChromaDB, API, n8n
+make healthcheck        # vérifie Qdrant, PostgreSQL, API, n8n
 make install-service    # installe le service launchd (démarrage au boot)
 
 # Agents (terminal)
-make dev-senior         # Agent Dev Senior (Ollama local)
-make dev-senior-cloud   # Agent Dev Senior (Claude API)
-make biz-manager        # Agent Business Manager (Ollama local)
-make biz-manager-cloud  # Agent Business Manager (Claude API)
+make dev-senior         # Agent Dev Senior
+make biz-manager        # Agent Business Manager
 
-# Docker
-make docker-up          # démarrer les containers
-make docker-down        # arrêter les containers
-make models             # télécharger les modèles LLM
+# Frontend React
+make frontend-install   # npm install (une seule fois)
+make frontend           # Vite dev server sur http://localhost:5173
+make frontend-build     # build de production
 
-# API & n8n
+# API
 make api                # démarrer l'API HTTP (port 8080)
 make n8n                # ouvrir n8n dans le navigateur
 
 # Mémoire
-make index-codebase     # indexer le projet dans ChromaDB
+make index-codebase     # indexer le projet dans Qdrant
 make index-codebase-force  # réindexer intégralement
 
 # Qualité
@@ -141,18 +147,12 @@ make logs               # logs de l'API en temps réel
 
 ### Configuration obligatoire en production
 
-1. **Clé API** : définir `AGENTS_API_KEY` dans `.env` — tous les endpoints API requièrent le header `X-API-Key`
-2. **n8n** : changer `N8N_PASSWORD` (jamais laisser `changeme`)
-3. **ChromaDB** : changer `CHROMA_TOKEN` (jamais laisser `dev-token`)
-4. **Google credentials** : `credentials.json` et `token.json` sont dans `.gitignore` — ne jamais les committer
-5. **Swagger** : désactiver en prod avec `DOCS_ENABLED=false`
-
-### Ce qui est protégé
-
-- Tous les endpoints API (sauf `/health`) requièrent `X-API-Key`
-- CORS restreint aux origines configurées dans `CORS_ORIGINS`
-- Pre-commit bloque le commit de secrets (`detect-private-key`, `.env`)
-- GitHub Actions scanne les secrets avec TruffleHog
+1. **OpenRouter** : définir `OPENROUTER_API_KEY` dans `.env`
+2. **Clé API agents** : définir `AGENTS_API_KEY` — tous les endpoints requièrent le header `X-API-Key`
+3. **n8n** : changer `N8N_PASSWORD` (jamais laisser `changeme`)
+4. **PostgreSQL** : changer `POSTGRES_PASSWORD`
+5. **Google credentials** : `credentials.json` et `token.json` sont dans `.gitignore` — ne jamais les committer
+6. **Swagger** : désactiver en prod avec `DOCS_ENABLED=false`
 
 ### Générer une clé API sécurisée
 
@@ -168,6 +168,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 - Mac mini M4 (ou tout Mac Apple Silicon)
 - Python 3.11+
+- Node.js 20+
 - Docker Desktop
 - Git
 
@@ -176,12 +177,12 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```bash
 git clone <repo-url> && cd Dev-Senior
 cp .env.example .env
-# → Éditer .env avec vos clés API
+# → Éditer .env : OPENROUTER_API_KEY, POSTGRES_PASSWORD, AGENTS_API_KEY
 
-make setup       # installe tout
-make docker-up   # démarre les services
-make models      # télécharge les modèles (~5 min)
-make healthcheck # vérifie que tout est OK
+make setup              # installe Python deps
+make docker-up          # démarre Qdrant + PostgreSQL + n8n
+make healthcheck        # vérifie que tout est OK
+make frontend-install   # installe les deps npm
 ```
 
 ### Démarrage au boot (Mac mini M4)
@@ -198,8 +199,6 @@ make install-service   # installe le service launchd
 - **CI** (`.github/workflows/ci.yml`) : lint + types + tests + scan secrets — déclenché sur chaque push/PR
 - **Deploy** (`.github/workflows/deploy.yml`) : déploiement automatique sur self-hosted runner (Mac mini M4) après merge sur `main`
 
-Pour activer le déploiement automatique : installer le runner GitHub Actions sur le Mac mini (`Settings → Actions → Runners → New self-hosted runner`).
-
 ---
 
 ## Structure du projet
@@ -209,32 +208,39 @@ Dev-Senior/
 ├── agents/                 ← Agents Pydantic AI
 │   ├── dev_senior/         ← Agent technique
 │   ├── biz_manager/        ← Agent business
-│   └── config.py           ← Switch local/cloud
+│   └── config.py           ← OpenRouter model factory
 ├── mcp_servers/            ← Intégrations MCP custom
 │   ├── github/             ← GitHub API
 │   ├── google_workspace/   ← Drive, Gmail, Calendar
 │   ├── crm/                ← HubSpot (adaptable)
 │   └── seo/                ← Search Console + DataForSEO
-├── api/                    ← API FastAPI (pour n8n)
+├── api/                    ← API FastAPI
 │   ├── auth.py             ← Authentification X-API-Key
+│   ├── db.py               ← Pool asyncpg + get_pool()
 │   ├── main.py             ← App + CORS + lifespan
+│   ├── sessions.py         ← Sessions PostgreSQL
 │   └── routes/             ← Endpoints par agent
-├── memory/                 ← Mémoire vectorielle
+├── memory/                 ← Mémoire vectorielle (Qdrant)
 │   ├── dev_senior/         ← Indexer + retriever codebase
 │   ├── biz_manager/        ← Contexte business
-│   ├── embeddings.py       ← Ollama nomic-embed-text
-│   └── store.py            ← Client ChromaDB
+│   ├── embeddings.py       ← OpenRouter text-embedding-3-small
+│   └── store.py            ← Client Qdrant
 ├── observability/          ← Tracing et évaluations
 │   ├── logfire_config.py   ← Configuration Logfire
 │   └── evals/              ← Eval qualité + détection dérive
+├── frontend/               ← React + Vite + TypeScript + Tailwind
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── api/agents.ts
+│   │   ├── hooks/useChat.ts
+│   │   └── components/
+│   └── package.json
 ├── workflows/n8n/          ← 5 workflows JSON prêts à importer
 ├── infra/
-│   ├── docker/             ← docker-compose (Ollama+ChromaDB+n8n)
-│   └── deploy/             ← Scripts start/stop/healthcheck/launchd
+│   ├── docker/             ← docker-compose (Qdrant + PostgreSQL + n8n)
+│   └── deploy/             ← start/stop/healthcheck/launchd + init.sql
 ├── tests/                  ← Tests unitaires et intégration
 ├── docs/                   ← Guides utilisateurs
-│   ├── guide_dev_senior.md
-│   └── guide_biz_manager.md
 ├── .github/workflows/      ← CI/CD GitHub Actions
 ├── CLAUDE.md               ← Instructions pour Claude Code
 ├── Makefile                ← Toutes les commandes

@@ -1,26 +1,30 @@
 """
-Client ChromaDB partagé entre tous les agents.
+Client Qdrant partagé entre tous les agents.
 """
 import os
-import chromadb
-from chromadb import HttpClient
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams
 
-_client: HttpClient | None = None
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+EMBEDDING_DIM = 1536  # text-embedding-3-small
+
+_client: QdrantClient | None = None
 
 
-def get_client() -> HttpClient:
+def get_client() -> QdrantClient:
     global _client
     if _client is None:
-        _client = chromadb.HttpClient(
-            host=os.getenv("CHROMA_HOST", "localhost"),
-            port=int(os.getenv("CHROMA_PORT", "8000")),
-            headers={"Authorization": f"Bearer {os.getenv('CHROMA_TOKEN', 'dev-token')}"},
-        )
+        _client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
     return _client
 
 
-def get_or_create_collection(name: str, metadata: dict | None = None) -> chromadb.Collection:
-    return get_client().get_or_create_collection(
-        name=name,
-        metadata=metadata or {"hnsw:space": "cosine"},
-    )
+def ensure_collection(name: str, size: int = EMBEDDING_DIM) -> None:
+    """Crée la collection si elle n'existe pas encore."""
+    client = get_client()
+    existing = {c.name for c in client.get_collections().collections}
+    if name not in existing:
+        client.create_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=size, distance=Distance.COSINE),
+        )
