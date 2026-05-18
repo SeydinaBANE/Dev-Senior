@@ -1,20 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { sendChat, resetSession, type AgentType } from '../api/agents'
+import { sendChatStream, resetSession, type AgentType } from '../api/agents'
 
 export interface Message {
   id: string
   role: 'user' | 'agent'
   content: string
   timestamp: Date
+  streaming?: boolean  // true tant que le stream n'est pas terminé
 }
 
 export function useChat(agent: AgentType) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false)   // true = attente du 1er token
+  const [streaming, setStreaming] = useState(false) // true = tokens en cours
   const [error, setError] = useState<string | null>(null)
   const sessionId = useRef<string>('')
 
-  // Reset when agent switches
   useEffect(() => {
     setMessages([])
     setError(null)
@@ -22,7 +23,7 @@ export function useChat(agent: AgentType) {
   }, [agent])
 
   const send = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return
+    if (!text.trim() || loading || streaming) return
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -34,22 +35,43 @@ export function useChat(agent: AgentType) {
     setLoading(true)
     setError(null)
 
+    const agentMsgId = crypto.randomUUID()
+
     try {
-      const res = await sendChat(agent, text, sessionId.current)
-      sessionId.current = res.session_id
-      const agentMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'agent',
-        content: res.response,
-        timestamp: new Date(),
+      for await (const chunk of sendChatStream(agent, text, sessionId.current)) {
+        if (chunk.type === 'session') {
+          sessionId.current = chunk.sessionId
+        } else if (chunk.type === 'chunk') {
+          if (loading) {
+            // Premier token : quitter le mode "attente" et afficher la bulle
+            setLoading(false)
+            setStreaming(true)
+            setMessages(prev => [
+              ...prev,
+              { id: agentMsgId, role: 'agent', content: chunk.text, timestamp: new Date(), streaming: true },
+            ])
+          } else {
+            // Tokens suivants : accumuler dans la bulle existante
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === agentMsgId ? { ...m, content: m.content + chunk.text } : m,
+              ),
+            )
+          }
+        } else if (chunk.type === 'done') {
+          setMessages(prev =>
+            prev.map(m => (m.id === agentMsgId ? { ...m, streaming: false } : m)),
+          )
+          setStreaming(false)
+        }
       }
-      setMessages(prev => [...prev, agentMsg])
     } catch (e) {
+      setMessages(prev => prev.filter(m => m.id !== agentMsgId))
       setError(e instanceof Error ? e.message : 'Erreur inattendue')
-    } finally {
       setLoading(false)
+      setStreaming(false)
     }
-  }, [agent, loading])
+  }, [agent, loading, streaming])
 
   const reset = useCallback(async () => {
     await resetSession(agent, sessionId.current)
@@ -58,5 +80,5 @@ export function useChat(agent: AgentType) {
     setError(null)
   }, [agent])
 
-  return { messages, loading, error, send, reset }
+  return { messages, loading, streaming, error, send, reset }
 }
