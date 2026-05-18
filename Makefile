@@ -7,7 +7,7 @@ PYTEST := $(VENV)/bin/pytest
 MYPY := $(VENV)/bin/mypy
 RUFF := $(VENV)/bin/ruff
 
-.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install serve-prod install-eval-cron run-eval-cron
+.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install frontend-env serve-prod install-eval-cron run-eval-cron
 
 # ── Aide ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ help:
 	@echo ""
 	@echo "  Frontend React"
 	@echo "    make frontend-install   Installe les dépendances npm"
+	@echo "    make frontend-env       Crée frontend/.env.local depuis l'exemple"
 	@echo "    make frontend           Lance le dev server Vite (port 5173)"
 	@echo "    make frontend-build     Build de production"
 	@echo ""
@@ -103,6 +104,14 @@ biz-manager:
 
 frontend-install:
 	cd frontend && npm install
+
+frontend-env:
+	@if [ ! -f frontend/.env.local ]; then \
+		cp frontend/.env.example frontend/.env.local; \
+		echo "✓ frontend/.env.local créé — remplir VITE_API_KEY avant de builder"; \
+	else \
+		echo "frontend/.env.local existe déjà"; \
+	fi
 
 frontend:
 	cd frontend && npm run dev
