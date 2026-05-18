@@ -32,6 +32,8 @@ from api.sessions import SessionStore
 from api.routes.dev_senior import router as dev_router
 from api.routes.biz_manager import router as biz_router
 from api.routes.metrics import router as metrics_router
+from api.routes.slack import router as slack_router
+from api.routes.teams import router as teams_router
 from api.metrics_store import record_request
 
 
@@ -71,6 +73,8 @@ app.add_middleware(
 app.include_router(dev_router)
 app.include_router(biz_router)
 app.include_router(metrics_router)
+app.include_router(slack_router)
+app.include_router(teams_router)
 
 
 @app.middleware("http")
