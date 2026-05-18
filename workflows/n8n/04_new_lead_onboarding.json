@@ -1,0 +1,112 @@
+{
+  "name": "04 — Onboarding Nouveau Lead (Biz Manager)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d4e5f6a7-0004-0004-0004-000000000001",
+      "name": "Webhook Nouveau Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "notes": "Déclenché par HubSpot, formulaire web, ou manuellement"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "task",
+              "value": "=Rédige un email de bienvenue chaleureux et professionnel pour ce nouveau prospect. L'email doit : présenter brièvement notre offre, proposer un appel découverte de 20 min, inclure un appel à l'action clair. Ton : humain, direct, sans jargon marketing.\n\nPrénom : {{ $json.firstname }}\nEntreprise : {{ $json.company }}\nSecteur : {{ $json.industry || 'non précisé' }}\nSource : {{ $json.source || 'formulaire web' }}\nMessage initial : {{ $json.message || 'aucun' }}"
+            }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "id": "d4e5f6a7-0004-0004-0004-000000000002",
+      "name": "Biz Manager — Rédiger email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "toEmail": "={{ $('Webhook Nouveau Lead').item.json.email }}",
+        "subject": "=Bienvenue {{ $('Webhook Nouveau Lead').item.json.firstname }} 👋",
+        "emailType": "text",
+        "message": "={{ $json.result }}",
+        "options": {}
+      },
+      "id": "d4e5f6a7-0004-0004-0004-000000000003",
+      "name": "Envoyer email bienvenue",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENTS_API_URL }}/biz-manager/task",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "task",
+              "value": "=Crée une note CRM pour ce nouveau contact avec un résumé de son profil et les prochaines actions à entreprendre.\n\nContact : {{ $('Webhook Nouveau Lead').item.json.firstname }} {{ $('Webhook Nouveau Lead').item.json.lastname }}\nEntreprise : {{ $('Webhook Nouveau Lead').item.json.company }}\nEmail envoyé : {{ $('Biz Manager — Rédiger email').item.json.result }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d4e5f6a7-0004-0004-0004-000000000004",
+      "name": "Biz Manager — Note CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"onboarding_done\", \"email_sent\": true } }}"
+      },
+      "id": "d4e5f6a7-0004-0004-0004-000000000005",
+      "name": "Réponse Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Nouveau Lead": {
+      "main": [[{ "node": "Biz Manager — Rédiger email", "type": "main", "index": 0 }]]
+    },
+    "Biz Manager — Rédiger email": {
+      "main": [[{ "node": "Envoyer email bienvenue", "type": "main", "index": 0 }]]
+    },
+    "Envoyer email bienvenue": {
+      "main": [[{ "node": "Biz Manager — Note CRM", "type": "main", "index": 0 }]]
+    },
+    "Biz Manager — Note CRM": {
+      "main": [[{ "node": "Réponse Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "notes": "Payload attendu : { firstname, lastname, email, company, industry?, source?, message? }"
+}

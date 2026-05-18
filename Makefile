@@ -35,6 +35,10 @@ help:
 	@echo "    make typecheck    Vérifie les types avec mypy"
 	@echo "    make check        lint + typecheck + test"
 	@echo ""
+	@echo "  API & n8n"
+	@echo "    make api          Démarre l'API HTTP agents (port 8080)"
+	@echo "    make n8n          Ouvre n8n dans le navigateur"
+	@echo ""
 	@echo "  Mémoire"
 	@echo "    make index-codebase   Indexe le projet courant dans ChromaDB"
 	@echo ""
@@ -111,6 +115,17 @@ typecheck:
 
 check: lint typecheck test
 	@echo "✓ Tout est propre."
+
+# ── API HTTP & n8n ───────────────────────────────────────────────────────────
+
+api:
+	$(VENV)/bin/uvicorn api.main:app --host 0.0.0.0 --port $${PORT:-8080} --reload
+
+api-prod:
+	$(VENV)/bin/uvicorn api.main:app --host 0.0.0.0 --port $${PORT:-8080} --workers 2
+
+n8n:
+	open http://localhost:5678
 
 # ── Mémoire ──────────────────────────────────────────────────────────────────
 

@@ -1,0 +1,119 @@
+{
+  "name": "01 — PR Review Bot (Dev Senior)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-pr",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Webhook GitHub PR",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "notes": "Configurer dans GitHub : Settings → Webhooks → Pull requests"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equal",
+              "value2": "opened"
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "Filtre — PR ouverte",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENTS_API_URL }}/dev-senior/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "=Fais une code review de cette PR GitHub.\n\nTitre : {{ $json.pull_request.title }}\nDescription : {{ $json.pull_request.body }}\nFichiers modifiés : {{ $json.pull_request.changed_files }}\nAuteur : {{ $json.pull_request.user.login }}\nURL : {{ $json.pull_request.html_url }}\n\nDonne : points positifs, problèmes détectés, suggestions d'amélioration."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Dev Senior — Review PR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $('Webhook GitHub PR').item.json.repository.full_name }}/pulls/{{ $('Webhook GitHub PR').item.json.pull_request.number }}/reviews",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.GITHUB_TOKEN }}" },
+            { "name": "Accept", "value": "application/vnd.github+json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "body", "value": "={{ $json.response }}" },
+            { "name": "event", "value": "COMMENT" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000004",
+      "name": "Poster le commentaire GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"review_posted\" } }}"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000005",
+      "name": "Réponse Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 200]
+    }
+  ],
+  "connections": {
+    "Webhook GitHub PR": {
+      "main": [[{ "node": "Filtre — PR ouverte", "type": "main", "index": 0 }]]
+    },
+    "Filtre — PR ouverte": {
+      "main": [
+        [{ "node": "Dev Senior — Review PR", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Dev Senior — Review PR": {
+      "main": [[{ "node": "Poster le commentaire GitHub", "type": "main", "index": 0 }]]
+    },
+    "Poster le commentaire GitHub": {
+      "main": [[{ "node": "Réponse Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "notes": "Prérequis : GITHUB_TOKEN et AGENTS_API_URL dans les variables d'env n8n"
+}

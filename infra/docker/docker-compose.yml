@@ -9,10 +9,7 @@ services:
     restart: unless-stopped
     # Note: Docker Desktop sur Mac ne donne pas accès au GPU Metal.
     # L'inférence tourne en CPU. Pour exploiter le M4, utiliser Ollama natif.
-    # Workaround : monter /root/.ollama sur un volume nommé pour éviter
-    # de re-télécharger les modèles à chaque restart.
 
-  # Optionnel : ChromaDB pour la mémoire vectorielle
   chromadb:
     image: chromadb/chroma:latest
     container_name: chromadb
@@ -26,6 +23,29 @@ services:
       - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_TOKEN:-dev-token}
       - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
 
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./../../workflows/n8n:/workflows  # accès aux exports JSON
+    restart: unless-stopped
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      # URL de l'API agents (pour les HTTP Request nodes)
+      - AGENTS_API_URL=http://host.docker.internal:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # accès à l'API agents depuis n8n
+
 volumes:
   ollama_models:
   chroma_data:
+  n8n_data:
