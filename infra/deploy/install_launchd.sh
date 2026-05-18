@@ -15,8 +15,18 @@ echo "Installation du service launchd..."
 # Créer le dossier de logs
 mkdir -p "$LOG_DIR"
 
-# Remplacer /path/to/project par le vrai chemin
+# Vérifier que .env existe
+if [[ ! -f "$PROJECT_DIR/.env" ]]; then
+    echo "ERREUR : $PROJECT_DIR/.env introuvable."
+    echo "Copier .env.example → .env et remplir les variables avant d'installer le service."
+    exit 1
+fi
+
+# Remplacer /path/to/project par le vrai chemin (plist + wrapper)
 sed "s|/path/to/project|$PROJECT_DIR|g" "$PLIST_SRC" > "$PLIST_DEST"
+
+# Rendre le wrapper exécutable
+chmod +x "$PROJECT_DIR/infra/deploy/start_api.sh"
 
 # Charger le service
 launchctl unload "$PLIST_DEST" 2>/dev/null || true

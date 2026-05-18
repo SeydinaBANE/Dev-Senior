@@ -43,7 +43,19 @@ until docker exec postgres pg_isready -U "${POSTGRES_USER:-agents}" -d "${POSTGR
 done
 log "PostgreSQL prêt."
 
-# ── 4. API agents ─────────────────────────────────────────────────────────────
+# ── 4. Attendre Redis (optionnel — si le container existe) ───────────────────
+if docker ps --format '{{.Names}}' | grep -q "^redis$"; then
+    log "Attente de Redis..."
+    TRIES=0
+    until docker exec redis redis-cli ping > /dev/null 2>&1; do
+        sleep 2
+        TRIES=$((TRIES + 1))
+        [[ $TRIES -ge 15 ]] && fail "Redis ne répond pas après 30s"
+    done
+    log "Redis prêt."
+fi
+
+# ── 5. API agents ─────────────────────────────────────────────────────────────
 log "Démarrage de l'API agents..."
 PLIST="$HOME/Library/LaunchAgents/com.agents.api.plist"
 if [[ -f "$PLIST" ]]; then
@@ -60,6 +72,6 @@ else
     log "API démarrée (PID: $(cat "$LOG_DIR/api.pid"))."
 fi
 
-# ── 5. Health check final ─────────────────────────────────────────────────────
+# ── 6. Health check final ─────────────────────────────────────────────────────
 sleep 4
 bash "$PROJECT_DIR/infra/deploy/healthcheck.sh"

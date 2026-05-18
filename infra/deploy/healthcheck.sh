@@ -32,25 +32,32 @@ echo ""
 
 ERRORS=0
 
-check "Qdrant"      "http://localhost:6333/healthz"      ""    || ERRORS=$((ERRORS+1))
-check "PostgreSQL"  "http://localhost:8080/health"       "ok"  || ERRORS=$((ERRORS+1))
-check "API agents"  "http://localhost:8080/health"       "ok"  || ERRORS=$((ERRORS+1))
-check "n8n"         "http://localhost:5678/healthz"      ""    || ERRORS=$((ERRORS+1))
+check "Qdrant"      "http://localhost:6333/healthz"  ""   || ERRORS=$((ERRORS+1))
+check "API agents"  "http://localhost:8080/health"   "ok" || ERRORS=$((ERRORS+1))
+check "n8n"         "http://localhost:5678/healthz"  ""   || ERRORS=$((ERRORS+1))
 
-# Vérifier PostgreSQL directement si psql est disponible
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
 echo ""
 echo "--- PostgreSQL ---"
-if command -v psql &>/dev/null; then
-    if PGPASSWORD="${POSTGRES_PASSWORD:-change-this-password}" psql \
-        -h localhost -U "${POSTGRES_USER:-agents}" -d "${POSTGRES_DB:-agents_db}" \
-        -c "SELECT 1" &>/dev/null 2>&1; then
-        echo -e "$OK PostgreSQL (connexion directe OK)"
+if docker exec postgres pg_isready -U "${POSTGRES_USER:-agents}" -d "${POSTGRES_DB:-agents_db}" > /dev/null 2>&1; then
+    echo -e "$OK PostgreSQL"
+else
+    echo -e "$FAIL PostgreSQL — container non joignable"
+    ERRORS=$((ERRORS+1))
+fi
+
+# ── Redis (optionnel) ─────────────────────────────────────────────────────────
+echo ""
+echo "--- Redis ---"
+if docker ps --format '{{.Names}}' | grep -q "^redis$"; then
+    if docker exec redis redis-cli ping > /dev/null 2>&1; then
+        echo -e "$OK Redis"
     else
-        echo -e "$FAIL PostgreSQL (connexion directe KO)"
+        echo -e "$FAIL Redis — container non joignable"
         ERRORS=$((ERRORS+1))
     fi
 else
-    echo "(psql non disponible — vérification via API uniquement)"
+    echo "(Redis non démarré — sessions PostgreSQL utilisées)"
 fi
 
 echo ""

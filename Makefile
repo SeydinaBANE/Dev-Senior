@@ -7,7 +7,7 @@ PYTEST := $(VENV)/bin/pytest
 MYPY := $(VENV)/bin/mypy
 RUFF := $(VENV)/bin/ruff
 
-.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install frontend-env serve-prod install-eval-cron run-eval-cron
+.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install frontend-env serve-prod install-eval-cron run-eval-cron deploy start stop healthcheck install-service logs logs-error
 
 # ── Aide ─────────────────────────────────────────────────────────────────────
 
@@ -60,6 +60,7 @@ help:
 	@echo "    make stop               Arrête tous les services"
 	@echo "    make healthcheck        Vérifie l'état de tous les services"
 	@echo "    make install-service    Installe le service launchd (une fois)"
+	@echo "    make deploy             check + build frontend + redémarre l'API"
 	@echo ""
 	@echo "  Divers"
 	@echo "    make clean              Supprime le venv et les caches"
@@ -218,8 +219,11 @@ logs:
 logs-error:
 	@tail -f logs/api-error.log
 
-deploy: check install
-	@echo "Déploiement terminé. Lance 'make start' pour démarrer."
+deploy: check install frontend-build
+	@chmod +x infra/deploy/start_api.sh
+	launchctl unload "$(HOME)/Library/LaunchAgents/com.agents.api.plist" 2>/dev/null || true
+	launchctl load "$(HOME)/Library/LaunchAgents/com.agents.api.plist"
+	@sleep 8 && bash infra/deploy/healthcheck.sh
 
 # ── Divers ───────────────────────────────────────────────────────────────────
 
