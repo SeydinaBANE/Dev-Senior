@@ -34,18 +34,23 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     context = retrieve_context(req.message)
     prompt = f"{context}\n\n{req.message}" if context else req.message
 
+    # Tracing Langfuse (no-op si non configuré)
     lf = get_langfuse()
     trace = lf.trace(
         name="dev-senior-chat",
         session_id=session_id,
         input={"message": req.message},
         metadata={"agent": "dev-senior"},
-    )
+    ) if lf else None
 
     result = await agent.run(prompt, message_history=history)
     response = result.data
 
-    trace.update(output={"response": response})
+    if trace:
+        try:
+            trace.update(output={"response": response})
+        except Exception:
+            pass
 
     messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
     await set_history(pool, session_id, messages)

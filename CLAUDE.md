@@ -16,7 +16,7 @@ agents/          ← Pydantic AI agents (modèle, prompt, mémoire)
 mcp_servers/     ← Serveurs MCP (GitHub, Google WS, CRM, SEO)
 api/             ← FastAPI : auth.py, db.py (asyncpg), main.py, routes/, sessions.py
 memory/          ← Qdrant : embeddings (OpenRouter), indexer, retriever
-observability/   ← logfire_config.py, evals/ (qualité + dérive)
+observability/   ← langfuse_config.py, evals/ (qualité + dérive)
 workflows/n8n/   ← 5 JSONs importables (tous avec header X-API-Key)
 frontend/        ← React + Vite + TypeScript + Tailwind (port 5173)
 infra/docker/    ← docker-compose (Qdrant + PostgreSQL + n8n)
@@ -90,7 +90,7 @@ make install-service    # installer le service launchd (démarrage au boot)
 
 ## Décisions architecturales
 
-- **Pydantic AI** : type-safe, multi-provider, natif Logfire
+- **Pydantic AI** : type-safe, multi-provider, s'intègre nativement avec Langfuse via traces manuelles
 - **OpenRouter** : une seule clé pour tous les modèles (Qwen, Llama, embeddings)
 - **Qdrant** : base vectorielle prod-ready avec dashboard HTTP (`http://localhost:6333/dashboard`)
 - **PostgreSQL + asyncpg** : sessions persistantes avec TTL 60 min, pool de connexions géré dans le lifespan FastAPI

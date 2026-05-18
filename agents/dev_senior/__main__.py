@@ -13,7 +13,6 @@ console = Console()
 
 async def chat_loop() -> None:
     configure_observability("dev-senior")
-    lf = get_langfuse()
     console.print("[bold green]Dev Senior[/] — prêt. Tape 'exit' pour quitter.\n")
     history: list = []
 
@@ -26,16 +25,31 @@ async def chat_loop() -> None:
             context = retrieve_context(user_input)
             prompt = f"{context}\n\n{user_input}" if context else user_input
 
-            trace = lf.trace(name="dev-senior-chat", input={"message": user_input})
+            lf = get_langfuse()
+            trace = lf.trace(
+                name="dev-senior-chat",
+                input={"message": user_input},
+                metadata={"agent": "dev-senior", "mode": "cli"},
+            ) if lf else None
+
             with console.status("Réflexion..."):
                 result = await agent.run(prompt, message_history=history)
 
             response = result.data
-            trace.update(output={"response": response}, metadata={"agent": "dev-senior"})
+            if trace:
+                try:
+                    trace.update(output={"response": response})
+                except Exception:
+                    pass
+
             console.print(f"\n[bold green]Dev Senior[/]\n{response}\n")
             history = result.all_messages()
 
-    lf.flush()
+    if lf := get_langfuse():
+        try:
+            lf.flush()
+        except Exception:
+            pass
 
 
 @app.command()

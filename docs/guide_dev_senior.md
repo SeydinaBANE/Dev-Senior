@@ -12,14 +12,17 @@ Dev Senior est un agent IA qui connaît votre codebase et agit comme un membre p
 
 ## Démarrage rapide
 
+**Option 1 — Interface web (recommandé)**
+
 ```bash
-# Terminal, dans le dossier du projet
-make dev-senior
+make api           # démarre l'API (port 8080)
+make frontend      # démarre le frontend → http://localhost:5173
 ```
 
-Si tu veux utiliser Claude API au lieu d'Ollama local :
+**Option 2 — Terminal**
+
 ```bash
-make dev-senior-cloud
+make dev-senior
 ```
 
 ---
@@ -69,7 +72,7 @@ make index-codebase
 make index-codebase-force
 ```
 
-La mémoire persiste entre les sessions — l'agent se souvient du contexte codebase même après un redémarrage.
+La mémoire est stockée dans Qdrant (dashboard : http://localhost:6333/dashboard) — elle persiste entre les sessions.
 
 ---
 
@@ -78,6 +81,7 @@ La mémoire persiste entre les sessions — l'agent se souvient du contexte code
 ```bash
 curl -X POST http://localhost:8080/dev-senior/chat \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: votre-cle-api" \
   -d '{"message": "Explique-moi le fichier api/main.py"}'
 ```
 
@@ -93,30 +97,31 @@ Pour continuer la conversation, réutiliser le même `session_id` :
 ```bash
 curl -X POST http://localhost:8080/dev-senior/chat \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: votre-cle-api" \
   -d '{"message": "Et comment améliorer la gestion des erreurs ?", "session_id": "abc123"}'
 ```
 
 ---
 
-## Modèles disponibles
+## Modèles
 
-| Mode | Modèle | Latence | Usage |
-|---|---|---|---|
-| Local (défaut) | qwen2.5-coder:7b via Ollama | ~5-15s | Usage quotidien |
-| Cloud | claude-sonnet-4-6 | ~2-5s | Tâches complexes |
+| Mode | Modèle | Fournisseur |
+|---|---|---|
+| Défaut | `qwen/qwen-2.5-coder-7b-instruct` | OpenRouter |
+| Changer | `DEV_SENIOR_MODEL=autre/modele` dans `.env` | OpenRouter |
 
-Passer en cloud : `USE_CLOUD=true make dev-senior`
+Pour changer de modèle, modifier `DEV_SENIOR_MODEL` dans `.env`. Tous les modèles disponibles : https://openrouter.ai/models
 
 ---
 
-## Surveillance
+## Observabilité
 
 ```bash
 # Vérifier que tout tourne
 make healthcheck
 
-# Voir les traces Logfire (si token configuré)
-# → https://logfire.pydantic.dev
+# Voir les traces dans Langfuse
+# → https://cloud.langfuse.com (ou LANGFUSE_HOST si self-hosted)
 
 # Évaluation qualité
 make eval-quality ARGS="--agent dev-senior --samples-file tests/samples/dev_senior.json"
@@ -127,10 +132,13 @@ make eval-quality ARGS="--agent dev-senior --samples-file tests/samples/dev_seni
 ## Problèmes courants
 
 **L'agent répond lentement**
-→ Normal en mode Docker CPU. Utiliser `make dev-senior-cloud` pour les tâches urgentes.
+→ Normal pour les modèles 7B-8B. Changer `DEV_SENIOR_MODEL` pour un modèle plus rapide/puissant sur OpenRouter.
 
-**"Ollama ne répond pas"**
-→ `make docker-up` puis attendre 30s.
+**"Qdrant ne répond pas"**
+→ `make docker-up` puis attendre 15s.
+
+**"PostgreSQL connexion refusée"**
+→ `make docker-up`. Vérifier `DATABASE_URL` dans `.env`.
 
 **La mémoire ne trouve pas le bon fichier**
 → Relancer `make index-codebase` après avoir ajouté des fichiers.

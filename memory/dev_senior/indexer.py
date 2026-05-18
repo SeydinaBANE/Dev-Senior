@@ -11,7 +11,13 @@ from typing import Iterator
 import typer
 from rich.console import Console
 from rich.progress import track
-from qdrant_client.models import PointStruct
+from qdrant_client.models import (
+    PointStruct,
+    Filter,
+    FieldCondition,
+    MatchValue,
+    FilterSelector,
+)
 
 from memory.store import get_client, ensure_collection
 from memory.embeddings import embed_batch, chunk_text
@@ -51,6 +57,10 @@ def _stable_id(rel_path: str, chunk_index: int) -> int:
     return int(hashlib.md5(key.encode()).hexdigest(), 16) % (2**63)
 
 
+def _source_filter(rel_path: str) -> Filter:
+    return Filter(must=[FieldCondition(key="source", match=MatchValue(value=rel_path))])
+
+
 @app.command()
 def index(
     path: str = typer.Argument(".", help="Chemin du dépôt à indexer"),
@@ -80,21 +90,20 @@ def index(
             content_hash = file_hash(content)
 
             if not force:
-                # Cherche si un point avec ce hash existe déjà
-                results, _ = client.scroll(
+                existing, _ = client.scroll(
                     collection_name=COLLECTION_NAME,
-                    scroll_filter={"must": [{"key": "source", "match": {"value": rel_path}}]},
+                    scroll_filter=_source_filter(rel_path),
                     limit=1,
                     with_payload=True,
                 )
-                if results and results[0].payload.get("hash") == content_hash:
+                if existing and existing[0].payload and existing[0].payload.get("hash") == content_hash:
                     skipped += 1
                     continue
-                # Supprime l'ancienne version
-                if results:
+                # Supprime l'ancienne version avant réindexation
+                if existing:
                     client.delete(
                         collection_name=COLLECTION_NAME,
-                        points_selector={"filter": {"must": [{"key": "source", "match": {"value": rel_path}}]}},
+                        points_selector=FilterSelector(filter=_source_filter(rel_path)),
                     )
 
             chunks = chunk_text(content)

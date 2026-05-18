@@ -50,12 +50,16 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         session_id=session_id,
         input={"message": req.message},
         metadata={"agent": "biz-manager"},
-    )
+    ) if lf else None
 
     result = await agent.run(prompt, message_history=history)
     response = result.data
 
-    trace.update(output={"response": response})
+    if trace:
+        try:
+            trace.update(output={"response": response})
+        except Exception:
+            pass
 
     messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
     await set_history(pool, session_id, messages)
@@ -72,13 +76,18 @@ async def run_task(req: TaskRequest) -> TaskResponse:
         name="biz-manager-task",
         input={"task": req.task},
         metadata={"agent": "biz-manager", "type": "one-shot"},
-    )
+    ) if lf else None
 
     prompt = f"{req.context}\n\n{req.task}" if req.context else req.task
     result = await agent.run(prompt)
     response = result.data
 
-    trace.update(output={"result": response})
+    if trace:
+        try:
+            trace.update(output={"result": response})
+        except Exception:
+            pass
+
     save_interaction(req.task, response)
     return TaskResponse(result=response)
 

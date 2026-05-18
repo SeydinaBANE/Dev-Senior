@@ -32,12 +32,12 @@ jobs:
       - name: Vérifier que les tests passent
         run: make check
 
-      - name: Mettre à jour les dépendances
+      - name: Mettre à jour les dépendances Python
         run: pip install -e ".[dev]"
 
       - name: Indexer la codebase (mémoire Dev Senior)
         run: make index-codebase
-        continue-on-error: true  # non bloquant si ChromaDB est down
+        continue-on-error: true  # non bloquant si Qdrant est down au moment du deploy
 
       - name: Redémarrer l'API agents
         run: |

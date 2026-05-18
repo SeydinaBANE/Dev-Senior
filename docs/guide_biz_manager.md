@@ -12,21 +12,23 @@ Le Business Manager est ton assistant IA personnel pour le marketing, le contenu
 
 ## Comment l'utiliser
 
-### Option 1 — En ligne de commande (pour les habitués du terminal)
+### Option 1 — Interface web (recommandé)
+
+1. Ouvre **http://localhost:5173**
+2. Sélectionne **Business Manager** dans la barre latérale
+3. Tape ton message et appuie sur Entrée
+
+### Option 2 — Via l'interface n8n (workflows automatiques)
+
+1. Ouvre http://localhost:5678
+2. Connexion : `admin` / le mot de passe fourni par l'équipe technique
+3. Les workflows sont déjà prêts — active ceux dont tu as besoin
+
+### Option 3 — En ligne de commande (pour les habitués du terminal)
 
 ```bash
 make biz-manager
 ```
-
-### Option 2 — Via l'interface web n8n (recommandé pour les non-tech)
-
-1. Ouvre http://localhost:5678
-2. Connexion : `admin` / `changeme` (ou les credentials fournis)
-3. Les workflows sont déjà prêts — active ceux dont tu as besoin
-
-### Option 3 — Via l'API (pour les intégrations)
-
-Envoie une requête POST à `http://localhost:8080/biz-manager/task` avec ton message.
 
 ---
 
@@ -121,7 +123,7 @@ Pour activer un workflow :
     avec un appel à l'action vers notre formulaire de contact"
 ```
 
-**Demande des variantes.** Tu peux toujours demander une version différente.
+**Demande des variantes.**
 
 ```
 Toi > Donne-moi 3 versions différentes, de plus en plus directes
@@ -137,8 +139,11 @@ Toi > [après avoir demandé un email] Raccourcis-le et mets le CTA en premier
 
 ## En cas de problème
 
+**L'interface web ne s'ouvre pas**
+→ Contacter l'équipe technique pour qu'elle lance `make api` et `make frontend`.
+
 **L'agent ne répond plus**
-→ Attends 30 secondes (charge du modèle) ou appelle l'équipe technique.
+→ Attends 30 secondes. Si ça persiste, appelle l'équipe technique.
 
 **La réponse n'est pas satisfaisante**
 → Reformule en ajoutant plus de contexte, ou demande "Peux-tu reformuler en étant plus [direct / créatif / formel] ?"
