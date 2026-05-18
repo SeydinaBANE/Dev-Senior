@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
 from memory.store import get_client, ensure_collection
 from memory.embeddings import embed
+from memory.shared.memory import save_shared, retrieve_shared
 
 COLLECTION_NAME = "biz_context"
 MIN_SCORE = 0.60
@@ -57,6 +58,7 @@ def save_interaction(user_message: str, agent_response: str, topic: str = "") ->
     """Sauvegarde une interaction agent pour enrichir la mémoire long terme."""
     content = f"Question: {user_message}\nRéponse: {agent_response}"
     save_note(content, category="interaction", tags=topic)
+    save_shared(content, source_agent="biz_manager", category="interaction", tags=topic)
 
 
 # ── Lecture ───────────────────────────────────────────────────────────────────
@@ -92,15 +94,19 @@ def retrieve_context(query: str, top_k: int = 4, category: str | None = None) ->
         with_payload=True,
     )
 
-    if not results:
-        return ""
+    parts: list[str] = []
 
-    parts = ["--- Contexte mémorisé ---"]
-    for hit in results:
-        cat = hit.payload.get("category", "")
-        date = hit.payload.get("created_at", "")[:10]
-        text = hit.payload.get("text", "")
-        parts.append(f"\n[{cat} • {date}]\n{text}")
-    parts.append("--- Fin du contexte ---")
+    if results:
+        parts.append("--- Contexte mémorisé ---")
+        for hit in results:
+            cat = hit.payload.get("category", "")
+            date = hit.payload.get("created_at", "")[:10]
+            text = hit.payload.get("text", "")
+            parts.append(f"\n[{cat} • {date}]\n{text}")
+        parts.append("--- Fin du contexte ---")
+
+    shared = retrieve_shared(query)
+    if shared:
+        parts.append(shared)
 
     return "\n".join(parts)
