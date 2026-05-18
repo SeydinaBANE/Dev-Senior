@@ -123,6 +123,8 @@ Le backend de sessions se sélectionne automatiquement selon `REDIS_URL` :
 - **Redis** (recommandé en prod) : TTL natif, O(1), aucune maintenance
 - **PostgreSQL** (défaut) : sessions persistantes avec TTL 60 min, pool asyncpg
 
+Les sessions sont partagées entre tous les points d'entrée — frontend, Slack et Teams utilisent le même store avec des clés distinctes (`slack:{channel_id}:{user_id}`, `teams:{conversation_id}`).
+
 ### Dashboard métriques
 Accessible via le frontend (onglet Dashboard) ou directement :
 ```bash
@@ -140,9 +142,13 @@ Créer une Slack App avec deux slash commands :
 
 Slack reçoit un accusé immédiat ; la réponse de l'agent est postée en différé via `response_url`.
 
+**Mémoire par canal :** chaque utilisateur conserve un fil de conversation persistant par canal Slack (clé `slack:{channel_id}:{user_id}`). Envoyer `/dev-senior reset` efface la mémoire.
+
 ### Intégration Teams
 Créer un outgoing webhook Teams pointant vers `POST /teams/message`.  
 Routage par mention : `@dev-senior <message>` ou `@biz-manager <message>`.
+
+**Mémoire par conversation :** l'historique est conservé par conversation Teams (clé `teams:{conversation_id}`). Envoyer `reset` dans la conversation réinitialise la mémoire.
 
 ### Streaming des réponses (SSE)
 Le frontend affiche les tokens au fur et à mesure via Server-Sent Events :

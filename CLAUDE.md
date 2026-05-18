@@ -35,8 +35,8 @@ api/
     dev_senior.py   ← POST /dev-senior/chat (JSON) | /chat/stream (SSE) | /reset | GET /health
     biz_manager.py  ← POST /biz-manager/chat (JSON) | /chat/stream (SSE) | /task | /reset | GET /health
     metrics.py      ← GET /metrics (latence + qualité, auth requise)
-    slack.py        ← POST /slack/command (slash commands /dev-senior /biz-manager)
-    teams.py        ← POST /teams/message (outgoing webhook, routage par @mention)
+    slack.py        ← POST /slack/command (slash commands /dev-senior /biz-manager) — sessions par canal+user (slack:{channel_id}:{user_id}), mot-clé "reset"
+    teams.py        ← POST /teams/message (outgoing webhook, routage par @mention) — sessions par conversation (teams:{conversation_id}), mot-clé "reset"
 
 memory/
   embeddings.py  ← génération embeddings via OpenRouter
@@ -162,12 +162,12 @@ make install-service    # installer le service launchd API (démarrage au boot)
 - **Pydantic AI** : type-safe, multi-provider, s'intègre nativement avec Langfuse via traces manuelles
 - **OpenRouter** : une seule clé pour tous les modèles (Qwen, Llama, embeddings)
 - **Qdrant** : base vectorielle prod-ready avec dashboard HTTP (`http://localhost:6333/dashboard`). 3 collections : `codebase` (RAG Dev Senior), `biz_context` (mémoire Biz Manager), `shared` (cross-agent)
-- **SessionStore (ABC)** : factory `SessionStore.create()` sélectionne Redis si `REDIS_URL` est défini, sinon PostgreSQL. Zéro changement côté routes. `RedisSessionStore` utilise des hashes Redis avec `EXPIRE` natif ; `PostgresSessionStore` wrape asyncpg avec cleanup TTL manuel
+- **SessionStore (ABC)** : factory `SessionStore.create()` sélectionne Redis si `REDIS_URL` est défini, sinon PostgreSQL. Zéro changement côté routes. `RedisSessionStore` utilise des hashes Redis avec `EXPIRE` natif ; `PostgresSessionStore` wrape asyncpg avec cleanup TTL manuel. `set_history` utilise un UPSERT (`INSERT ... ON CONFLICT DO UPDATE`) pour créer les sessions externes (Slack/Teams) au premier appel sans passer par `new_session`
 - **MCPServerStdio** : MCP servers démarrés une fois au lancement via `agent.run_mcp_servers()`
 - **React + Vite** : frontend découplé, dev proxy vers l'API sur :8080, build statique pour la prod (`base: '/app/'`). En prod, `StaticFiles(html=True)` sur `/app` sert le SPA avec fallback. `VITE_API_URL` permet de déployer le frontend sur un hôte différent
 - **Streaming SSE** : `POST /chat/stream` utilise `agent.run_stream(delta=True)` et retourne `StreamingResponse(media_type="text/event-stream")`. Format : `event: session` → deltas JSON-encodés → `data: [DONE]` (ou `event: error`). Le JSON-encoding des deltas évite les problèmes de caractères spéciaux dans le protocole SSE. Session et `save_interaction()` sauvegardés après le stream, pas pendant. `X-Accel-Buffering: no` désactive le buffering nginx. Les endpoints `/chat` (JSON) coexistent comme fallback pour n8n
-- **Slack** : ack immédiat (< 3s) + `BackgroundTask` pour le vrai appel agent + POST à `response_url`. Body lu brut pour HMAC avant parsing manuel du form
-- **Teams** : réponse synchrone (Teams n'a pas de timeout strict), routage par regex sur le préfixe `@mention`, nettoyage HTML des balises Teams
+- **Slack** : ack immédiat (< 3s) + `BackgroundTask` pour le vrai appel agent + POST à `response_url`. Body lu brut pour HMAC avant parsing manuel du form. Session key = `slack:{channel_id}:{user_id}` — historique chargé/sauvegardé dans `_run_agent_and_reply`. Mot-clé `reset` traité de façon synchrone avant le background task.
+- **Teams** : réponse synchrone (Teams n'a pas de timeout strict), routage par regex sur le préfixe `@mention`, nettoyage HTML des balises Teams. `TeamsMessage.conversation: dict[str, str]` porte le `conversation.id`. Session key = `teams:{conversation_id}`. Mot-clé `reset` vide la session avant de retourner.
 - **Métriques** : `_AgentStore` in-memory avec `threading.Lock`, snapshot `statistics.quantiles` pour P50/P95. `GET /metrics` agrège runtime + dernier fichier JSON d'évaluation
 - **Eval cron** : launchd plist `com.agents.eval.plist`, 2h du matin, écrit un log JSON quotidien dans `logs/`
 - **Langfuse** : chaque appel agent crée un `trace` (input/output). Scores LLM-as-judge via `eval_quality.py`. Dashboard sur `cloud.langfuse.com`
