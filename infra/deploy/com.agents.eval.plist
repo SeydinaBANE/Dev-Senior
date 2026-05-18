@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.agents.eval</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Remplacer /path/to/project par le chemin réel (fait par install_eval_cron.sh) -->
+    <string>/path/to/project/.venv/bin/python</string>
+    <string>-m</string>
+    <string>observability.evals.cron_eval</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/path/to/project</string>
+
+  <!-- Charge le .env pour les clés API -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/path/to/project/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <!-- Exécution quotidienne à 2h00 -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>2</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- Logs -->
+  <key>StandardOutPath</key>
+  <string>/path/to/project/logs/eval.log</string>
+  <key>StandardErrorPath</key>
+  <string>/path/to/project/logs/eval-error.log</string>
+
+  <!-- Ne pas redémarrer automatiquement (job ponctuel) -->
+  <key>KeepAlive</key>
+  <false/>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

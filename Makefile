@@ -7,7 +7,7 @@ PYTEST := $(VENV)/bin/pytest
 MYPY := $(VENV)/bin/mypy
 RUFF := $(VENV)/bin/ruff
 
-.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install serve-prod
+.PHONY: help setup install dev docker-up docker-down dev-senior biz-manager test lint typecheck format clean frontend frontend-build frontend-install serve-prod install-eval-cron run-eval-cron
 
 # ── Aide ─────────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,8 @@ help:
 	@echo "  Observabilité"
 	@echo "    make eval-quality       Lance une évaluation qualité"
 	@echo "    make eval-drift         Détecte une dérive comportementale"
+	@echo "    make run-eval-cron      Lance l'évaluation automatique manuellement"
+	@echo "    make install-eval-cron  Installe le cron launchd (quotidien à 2h00)"
 	@echo ""
 	@echo "  Déploiement"
 	@echo "    make start              Démarre tout l'environnement"
@@ -160,6 +162,12 @@ eval-drift:
 
 eval-set-baseline:
 	$(VENV)/bin/python -m observability.evals.eval_drift --set-baseline $(ARGS)
+
+run-eval-cron:
+	$(VENV)/bin/python -m observability.evals.cron_eval
+
+install-eval-cron:
+	@chmod +x infra/deploy/install_eval_cron.sh && bash infra/deploy/install_eval_cron.sh
 
 # ── MCP Servers (tests isolés) ────────────────────────────────────────────────
 
