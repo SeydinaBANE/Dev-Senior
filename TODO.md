@@ -115,7 +115,7 @@ Dernière mise à jour : 2026-05-18
 - [x] Mémoire multi-agent : Dev Senior et Biz Manager partagent certains contextes
 - [x] Sessions Redis pour l'API (si scale nécessaire)
 - [x] Build frontend statique servi par FastAPI (`/app` — supprime le besoin de Vite en prod)
-- [ ] Intégration Slack/Teams pour accéder aux agents depuis le chat
+- [x] Intégration Slack/Teams pour accéder aux agents depuis le chat
 - [x] Évaluation automatique continue (cron quotidien)
 - [x] Dashboard métriques (latence P50/P95, taux d'erreur, qualité)
 - [ ] Support `VITE_API_KEY` via `frontend/.env.local` pour la prod frontend
