@@ -50,6 +50,9 @@ dev = [
 dev-senior = "agents.dev_senior.__main__:app"
 biz-manager = "agents.biz_manager.__main__:app"
 
+[tool.setuptools.packages.find]
+include = ["agents*", "api*", "memory*", "mcp_servers*", "observability*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
