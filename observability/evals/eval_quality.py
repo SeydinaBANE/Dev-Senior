@@ -127,7 +127,7 @@ def run(
         values = [getattr(s, field) for s in scores]
         table.add_row(
             field,
-            f"{sum(values)/len(values):.2f}",
+            f"{sum(values) / len(values):.2f}",
             str(min(values)),
             str(max(values)),
         )

@@ -48,7 +48,7 @@ def _get_credentials() -> Credentials:
         else:
             if not os.path.exists(CREDENTIALS_FILE):
                 raise RuntimeError(
-                    f"{CREDENTIALS_FILE} introuvable. " "Télécharge-le depuis Google Cloud Console."
+                    f"{CREDENTIALS_FILE} introuvable. Télécharge-le depuis Google Cloud Console."
                 )
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0)
