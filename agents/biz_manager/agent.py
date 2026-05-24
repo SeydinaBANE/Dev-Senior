@@ -1,8 +1,10 @@
 import sys
+
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStdio
-from agents.config import biz_manager_model
+
 from agents.biz_manager.prompts import SYSTEM_PROMPT
+from agents.config import biz_manager_model
 
 _python = sys.executable
 

@@ -3,6 +3,7 @@ Endpoint de métriques — agrège les stats runtime et les scores qualité.
 
 GET /metrics  → requiert X-API-Key (sauf si AGENTS_API_KEY absent)
 """
+
 import json
 from pathlib import Path
 

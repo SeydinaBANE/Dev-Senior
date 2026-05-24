@@ -1,4 +1,5 @@
 """Tests for POST /{agent}/upload endpoints."""
+
 import io
 import sys
 from types import ModuleType
@@ -31,8 +32,9 @@ _stub_memory()
 import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from api.routes.dev_senior import router as dev_router  # noqa: E402
+
 from api.routes.biz_manager import router as biz_router  # noqa: E402
+from api.routes.dev_senior import router as dev_router  # noqa: E402
 
 
 @pytest.fixture

@@ -1,8 +1,11 @@
 """
 Tests des outils Google Workspace — mock googleapiclient pour éviter OAuth et appels réseau.
 """
+
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from mcp_servers.google_workspace import server as gws
 
 
@@ -14,16 +17,20 @@ def mock_credentials():
 
 # ── Google Drive ──────────────────────────────────────────────────────────────
 
+
 @patch("mcp_servers.google_workspace.server.build")
 def test_list_drive_files_returns_results(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
     mock_service.files().list().execute.return_value = {
-        "files": [{
-            "id": "abc123", "name": "Rapport Q1",
-            "mimeType": "application/vnd.google-apps.document",
-            "modifiedTime": "2026-05-10T10:00:00Z",
-        }]
+        "files": [
+            {
+                "id": "abc123",
+                "name": "Rapport Q1",
+                "mimeType": "application/vnd.google-apps.document",
+                "modifiedTime": "2026-05-10T10:00:00Z",
+            }
+        ]
     }
     result = gws.list_drive_files("rapport")
     assert "Rapport Q1" in result
@@ -77,19 +84,20 @@ def test_create_drive_doc_returns_link(mock_build: MagicMock) -> None:
 
 # ── Gmail ─────────────────────────────────────────────────────────────────────
 
+
 @patch("mcp_servers.google_workspace.server.build")
 def test_list_emails_returns_results(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
-    mock_service.users().messages().list().execute.return_value = {
-        "messages": [{"id": "msg1"}]
-    }
+    mock_service.users().messages().list().execute.return_value = {"messages": [{"id": "msg1"}]}
     mock_service.users().messages().get().execute.return_value = {
-        "payload": {"headers": [
-            {"name": "From", "value": "alice@example.com"},
-            {"name": "Subject", "value": "Bonjour"},
-            {"name": "Date", "value": "2026-05-18T09:00:00Z"},
-        ]}
+        "payload": {
+            "headers": [
+                {"name": "From", "value": "alice@example.com"},
+                {"name": "Subject", "value": "Bonjour"},
+                {"name": "Date", "value": "2026-05-18T09:00:00Z"},
+            ]
+        }
     }
     result = gws.list_emails("is:unread")
     assert "alice@example.com" in result
@@ -114,6 +122,7 @@ def test_send_email_confirms_recipient(mock_build: MagicMock) -> None:
 
 
 # ── Google Calendar ───────────────────────────────────────────────────────────
+
 
 @patch("mcp_servers.google_workspace.server.build")
 def test_list_events_returns_results(mock_build: MagicMock) -> None:
@@ -143,8 +152,11 @@ def test_create_event_returns_link(mock_build: MagicMock) -> None:
         "htmlLink": "https://calendar.google.com/event?id=abc"
     }
     result = gws.create_event(
-        "Réunion", "2026-05-20T14:00:00", "2026-05-20T15:00:00",
-        "Discussion projet", "alice@example.com,bob@example.com",
+        "Réunion",
+        "2026-05-20T14:00:00",
+        "2026-05-20T15:00:00",
+        "Discussion projet",
+        "alice@example.com,bob@example.com",
     )
     assert "calendar.google.com" in result
 

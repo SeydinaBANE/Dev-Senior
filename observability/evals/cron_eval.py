@@ -12,17 +12,20 @@ Usage :
 Planification launchd :
     make install-eval-cron
 """
+
 import asyncio
 import json
-import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import typer
 from rich.console import Console
 
-from observability.evals.eval_quality import judge_interaction, EVALS_DIR
-from observability.evals.eval_drift import compute_metrics, load_baseline, load_scores, save_baseline
+from observability.evals.eval_drift import (
+    compute_metrics,
+    load_baseline,
+)
+from observability.evals.eval_quality import EVALS_DIR, judge_interaction
 from observability.langfuse_config import get_langfuse
 
 app = typer.Typer()
@@ -40,7 +43,7 @@ def _fetch_traces(agent: str, hours: int, limit: int) -> list[dict]:
         console.print(f"[yellow]Langfuse non configuré — pas de traces pour '{agent}'.[/]")
         return []
     try:
-        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        since = datetime.now(UTC) - timedelta(hours=hours)
         traces = lf.fetch_traces(
             name=f"{agent}-chat",
             from_timestamp=since,
@@ -51,11 +54,13 @@ def _fetch_traces(agent: str, hours: int, limit: int) -> list[dict]:
             if not trace.input or not trace.output:
                 continue
             question = (
-                trace.input.get("message", "") if isinstance(trace.input, dict)
+                trace.input.get("message", "")
+                if isinstance(trace.input, dict)
                 else str(trace.input)
             )
             response = (
-                trace.output.get("response", "") if isinstance(trace.output, dict)
+                trace.output.get("response", "")
+                if isinstance(trace.output, dict)
                 else str(trace.output)
             )
             if question and response:
@@ -93,7 +98,7 @@ async def _eval_agent(
 
     # Sauvegarde locale
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     output = RESULTS_DIR / f"{agent}_{timestamp}.json"
     output.write_text(json.dumps([s.model_dump() for s in scores], ensure_ascii=False, indent=2))
 
@@ -104,7 +109,9 @@ def _check_drift(agent: str, current: dict, threshold: float) -> list[tuple]:
     """Retourne la liste des métriques en dérive."""
     baseline = load_baseline(agent)
     if not baseline:
-        console.print(f"  [yellow]Pas de baseline pour '{agent}' — en définir une avec make eval-set-baseline.[/]")
+        console.print(
+            f"  [yellow]Pas de baseline pour '{agent}' — en définir une avec make eval-set-baseline.[/]"
+        )
         return []
     drifts = []
     for metric, base_val in baseline.items():
@@ -116,7 +123,7 @@ def _check_drift(agent: str, current: dict, threshold: float) -> list[tuple]:
 
 def _write_daily_log(report: dict) -> Path:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
     log_path = LOG_DIR / f"eval_{date}.log"
     log_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
     return log_path
@@ -127,10 +134,12 @@ def run(
     hours: int = typer.Option(24, help="Fenêtre de temps pour récupérer les traces (en heures)"),
     limit: int = typer.Option(20, help="Nombre max de traces par agent"),
     threshold: float = typer.Option(0.5, help="Seuil de dérive acceptable (en points sur 5)"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Sans push Langfuse ni écriture de fichiers"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Sans push Langfuse ni écriture de fichiers"
+    ),
 ) -> None:
     """Évaluation automatique quotidienne — à lancer via launchd ou make run-eval-cron."""
-    started_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(UTC).isoformat()
     console.print(f"\n[bold]Évaluation automatique — {started_at[:10]}[/]\n")
 
     report: dict = {"started_at": started_at, "agents": {}}
@@ -151,10 +160,7 @@ def run(
             report["agents"][agent] = {
                 "samples_evaluated": len(samples),
                 "metrics": metrics,
-                "drifts": [
-                    {"metric": m, "baseline": b, "current": c}
-                    for m, b, c in drifts
-                ],
+                "drifts": [{"metric": m, "baseline": b, "current": c} for m, b, c in drifts],
             }
 
             if drifts:
@@ -163,11 +169,13 @@ def run(
                 for metric, base, curr in drifts:
                     console.print(f"    {metric}: {base:.2f} → {curr:.2f} ({curr - base:+.2f})")
             else:
-                console.print(f"  [green]✓ Qualité stable. Score moyen : {metrics.get('score', 0):.2f}/5[/]")
+                console.print(
+                    f"  [green]✓ Qualité stable. Score moyen : {metrics.get('score', 0):.2f}/5[/]"
+                )
 
     asyncio.run(run_all())
 
-    report["finished_at"] = datetime.now(timezone.utc).isoformat()
+    report["finished_at"] = datetime.now(UTC).isoformat()
     report["drifts_detected"] = all_drifts
 
     if not dry_run:

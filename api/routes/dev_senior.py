@@ -7,11 +7,11 @@ from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
 from agents.dev_senior.agent import agent
-from memory.dev_senior.retriever import retrieve_context
-from observability.langfuse_config import get_langfuse
 from api.auth import require_api_key
 from api.file_extractor import extract_text
 from api.sessions import SessionStore
+from memory.dev_senior.retriever import retrieve_context
+from observability.langfuse_config import get_langfuse
 
 router = APIRouter(prefix="/dev-senior", tags=["Dev Senior"])
 
@@ -66,12 +66,16 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     prompt = _build_prompt(req.message, context, req.document_context)
 
     lf = get_langfuse()
-    trace = lf.trace(
-        name="dev-senior-chat",
-        session_id=session_id,
-        input={"message": req.message},
-        metadata={"agent": "dev-senior"},
-    ) if lf else None
+    trace = (
+        lf.trace(
+            name="dev-senior-chat",
+            session_id=session_id,
+            input={"message": req.message},
+            metadata={"agent": "dev-senior"},
+        )
+        if lf
+        else None
+    )
 
     result = await agent.run(prompt, message_history=history)
     response = result.data
@@ -100,12 +104,16 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     prompt = _build_prompt(req.message, context, req.document_context)
 
     lf = get_langfuse()
-    trace = lf.trace(
-        name="dev-senior-chat-stream",
-        session_id=session_id,
-        input={"message": req.message},
-        metadata={"agent": "dev-senior", "streaming": True},
-    ) if lf else None
+    trace = (
+        lf.trace(
+            name="dev-senior-chat-stream",
+            session_id=session_id,
+            input={"message": req.message},
+            metadata={"agent": "dev-senior", "streaming": True},
+        )
+        if lf
+        else None
+    )
 
     async def generate() -> AsyncGenerator[str, None]:
         yield f"event: session\ndata: {session_id}\n\n"
@@ -115,9 +123,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 async for delta in result.stream_text(delta=True):
                     chunks.append(delta)
                     yield f"data: {json.dumps(delta)}\n\n"
-                messages = ModelMessagesTypeAdapter.dump_python(
-                    result.all_messages(), mode="json"
-                )
+                messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
                 await sessions.set_history(session_id, messages)
             if trace:
                 try:

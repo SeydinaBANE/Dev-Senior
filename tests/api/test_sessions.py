@@ -1,13 +1,14 @@
 """Tests for SessionStore — RedisSessionStore and PostgresSessionStore."""
+
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.sessions import RedisSessionStore, PostgresSessionStore, SessionStore
-
+from api.sessions import PostgresSessionStore, RedisSessionStore, SessionStore
 
 # ── RedisSessionStore ─────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def redis_client() -> MagicMock:
@@ -35,14 +36,18 @@ async def test_redis_new_session(redis_store: RedisSessionStore, redis_client: M
 
 
 @pytest.mark.asyncio
-async def test_redis_get_history_empty(redis_store: RedisSessionStore, redis_client: MagicMock) -> None:
+async def test_redis_get_history_empty(
+    redis_store: RedisSessionStore, redis_client: MagicMock
+) -> None:
     redis_client.hget.return_value = json.dumps([])
     history = await redis_store.get_history("some-id")
     assert history == []
 
 
 @pytest.mark.asyncio
-async def test_redis_get_history_missing_key(redis_store: RedisSessionStore, redis_client: MagicMock) -> None:
+async def test_redis_get_history_missing_key(
+    redis_store: RedisSessionStore, redis_client: MagicMock
+) -> None:
     redis_client.hget.return_value = None
     history = await redis_store.get_history("missing-id")
     assert history == []
@@ -50,7 +55,9 @@ async def test_redis_get_history_missing_key(redis_store: RedisSessionStore, red
 
 
 @pytest.mark.asyncio
-async def test_redis_get_history_refreshes_ttl(redis_store: RedisSessionStore, redis_client: MagicMock) -> None:
+async def test_redis_get_history_refreshes_ttl(
+    redis_store: RedisSessionStore, redis_client: MagicMock
+) -> None:
     redis_client.hget.return_value = json.dumps([{"role": "user"}])
     await redis_store.get_history("some-id")
     redis_client.expire.assert_awaited_once()
@@ -65,7 +72,9 @@ async def test_redis_set_history(redis_store: RedisSessionStore, redis_client: M
 
 
 @pytest.mark.asyncio
-async def test_redis_delete_session(redis_store: RedisSessionStore, redis_client: MagicMock) -> None:
+async def test_redis_delete_session(
+    redis_store: RedisSessionStore, redis_client: MagicMock
+) -> None:
     await redis_store.delete_session("some-id")
     redis_client.delete.assert_awaited_once_with("session:some-id")
 
@@ -81,6 +90,7 @@ def test_redis_backend_property(redis_store: RedisSessionStore) -> None:
 
 
 # ── PostgresSessionStore ──────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def pg_pool() -> MagicMock:
@@ -106,7 +116,9 @@ async def test_postgres_new_session(pg_store: PostgresSessionStore, pg_pool: Mag
 
 
 @pytest.mark.asyncio
-async def test_postgres_get_history_missing(pg_store: PostgresSessionStore, pg_pool: MagicMock) -> None:
+async def test_postgres_get_history_missing(
+    pg_store: PostgresSessionStore, pg_pool: MagicMock
+) -> None:
     pg_pool.fetchrow.return_value = None
     pg_pool.execute = AsyncMock()  # _cleanup_expired call
     history = await pg_store.get_history("missing-id")
@@ -114,7 +126,9 @@ async def test_postgres_get_history_missing(pg_store: PostgresSessionStore, pg_p
 
 
 @pytest.mark.asyncio
-async def test_postgres_get_history_existing(pg_store: PostgresSessionStore, pg_pool: MagicMock) -> None:
+async def test_postgres_get_history_existing(
+    pg_store: PostgresSessionStore, pg_pool: MagicMock
+) -> None:
     payload = [{"role": "user", "content": "test"}]
     pg_pool.fetchrow.return_value = {"history": json.dumps(payload)}
     history = await pg_store.get_history("some-id")
@@ -149,6 +163,7 @@ def test_postgres_backend_property(pg_store: PostgresSessionStore) -> None:
 
 # ── SessionStore.create() factory ────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_factory_selects_redis_when_url_set() -> None:
     mock_store = MagicMock(spec=RedisSessionStore)
@@ -167,6 +182,7 @@ async def test_factory_selects_postgres_when_no_redis() -> None:
     with patch.dict("os.environ", {}, clear=False):
         # ensure REDIS_URL is absent
         import os
+
         os.environ.pop("REDIS_URL", None)
         with patch(
             "api.sessions.PostgresSessionStore.create",

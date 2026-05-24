@@ -7,13 +7,15 @@ Stocke et retrouve :
 - Notes de réunions et décisions
 - Briefs de contenu
 """
-import uuid
-from datetime import datetime, timezone
 
-from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
-from memory.store import get_client, ensure_collection
+import uuid
+from datetime import UTC, datetime
+
+from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
+
 from memory.embeddings import embed
-from memory.shared.memory import save_shared, retrieve_shared
+from memory.shared.memory import retrieve_shared, save_shared
+from memory.store import ensure_collection, get_client
 
 COLLECTION_NAME = "biz_context"
 MIN_SCORE = 0.60
@@ -24,6 +26,7 @@ def _ensure() -> None:
 
 
 # ── Écriture ──────────────────────────────────────────────────────────────────
+
 
 def save_note(content: str, category: str = "general", tags: str = "") -> str:
     """Sauvegarde une note dans la mémoire Business Manager.
@@ -45,7 +48,7 @@ def save_note(content: str, category: str = "general", tags: str = "") -> str:
                 payload={
                     "category": category,
                     "tags": tags,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                     "text": content,
                 },
             )
@@ -62,6 +65,7 @@ def save_interaction(user_message: str, agent_response: str, topic: str = "") ->
 
 
 # ── Lecture ───────────────────────────────────────────────────────────────────
+
 
 def retrieve_context(query: str, top_k: int = 4, category: str | None = None) -> str:
     """
@@ -85,7 +89,7 @@ def retrieve_context(query: str, top_k: int = 4, category: str | None = None) ->
             must=[FieldCondition(key="category", match=MatchValue(value=category))]
         )
 
-    results = client.search(
+    results = client.search(  # type: ignore[attr-defined]
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
         limit=top_k,

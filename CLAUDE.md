@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Dev-Senior — Instructions pour Claude Code
 
 ## Contexte du projet
@@ -101,20 +105,40 @@ make frontend           # Vite dev server (port 5173)
 make frontend-build     # build de production (bakes VITE_API_KEY dans le bundle)
 make serve-prod         # build frontend + API prod (frontend servi sur /app)
 
-make index-codebase     # indexer le repo dans Qdrant (mémoire Dev Senior)
+make index-codebase       # indexer le repo dans Qdrant (mémoire Dev Senior, incrémental)
+make index-codebase-force # réindexation complète (force upsert de tous les fichiers)
 
 make check              # lint + mypy + pytest
 make test               # pytest seul
+make test-watch         # pytest en mode watch (reruns automatiques)
 make lint               # ruff check
-make format             # ruff format
-make typecheck          # mypy agents/ api/ memory/ observability/
+make format             # ruff format + fix auto
+make typecheck          # mypy agents/ (strict, ignore-missing-imports)
+make deploy             # check + build frontend + redémarre le service launchd
 
 make eval-quality       # éval LLM-as-judge
 make eval-drift         # comparer aux métriques baseline
 make eval-set-baseline  # fixer la baseline
+make run-eval-cron      # lancer l'éval cron manuellement
 make install-eval-cron  # installer le cron d'évaluation quotidienne (launchd)
 make logs               # tail -f logs/api.log
+make logs-error         # tail -f logs/api-error.log
+make docker-logs        # logs Docker (Qdrant + PostgreSQL + n8n)
 make install-service    # installer le service launchd API (démarrage au boot)
+
+# MCP servers (démarrage isolé pour debug)
+make mcp-github / mcp-google / mcp-crm / mcp-seo
+
+# Tests ciblés
+make test-github        # pytest tests/mcp_servers/test_github.py
+make test-mcp           # pytest tests/mcp_servers/
+```
+
+### Lancer un test unique
+
+```bash
+.venv/bin/pytest tests/api/test_streaming.py -v
+.venv/bin/pytest tests/api/test_slack.py::test_reset_keyword -v
 ```
 
 ## Conventions de code
@@ -128,6 +152,8 @@ make install-service    # installer le service launchd API (démarrage au boot)
 - Upload de fichiers : `POST /{agent}/upload` accepte `multipart/form-data` ; retourne `{filename, text, size_chars}`. `ChatRequest.document_context` (optionnel) est injecté dans `_build_prompt()` sous `[Document joint]` avant le message utilisateur. Aucun stockage serveur : le client garde le texte et le renvoie à chaque message si nécessaire
 - Pas de commentaires évidents — seulement les "pourquoi" non-triviaux
 - Slack : lire `await request.body()` AVANT tout `Form()` parsing pour éviter "Stream consumed" — parser le form-encoded body manuellement avec `urllib.parse.parse_qs`
+- `observability/logfire_config.py` est un shim de compatibilité qui ré-exporte `configure_observability` depuis `langfuse_config.py` — ne pas l'étendre, pointer directement vers `langfuse_config`
+- `pytest` tourne en `asyncio_mode = "auto"` (pyproject.toml) — tous les tests async fonctionnent sans `@pytest.mark.asyncio`
 
 ## Sécurité — règles absolues
 
@@ -158,6 +184,9 @@ make install-service    # installer le service launchd API (démarrage au boot)
 | `LANGFUSE_SECRET_KEY` | Clé secrète Langfuse |
 | `LANGFUSE_HOST` | URL Langfuse (défaut : cloud.langfuse.com) |
 | `DOCS_ENABLED=false` | Désactiver Swagger en prod |
+| `DEV_SENIOR_MODEL` | Modèle Dev Senior (défaut : `qwen/qwen-2.5-coder-7b-instruct`) |
+| `BIZ_MANAGER_MODEL` | Modèle Biz Manager (défaut : `meta-llama/llama-3.1-8b-instruct`) |
+| `OPENROUTER_BASE_URL` | URL OpenRouter (défaut : `https://openrouter.ai/api/v1`) |
 
 ## Décisions architecturales
 

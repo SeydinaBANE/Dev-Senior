@@ -2,7 +2,9 @@
 Tests de la mémoire partagée entre agents.
 Mock Qdrant et embeddings pour éviter tout appel réseau.
 """
+
 from unittest.mock import MagicMock, patch
+
 from memory.shared import memory as sm
 
 
@@ -20,9 +22,13 @@ def _make_hit(text: str, source_agent: str, category: str = "general") -> MagicM
 @patch("memory.shared.memory.ensure_collection")
 @patch("memory.shared.memory.embed", return_value=[0.1] * 1536)
 @patch("memory.shared.memory.get_client")
-def test_save_shared_returns_uuid(mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock) -> None:
+def test_save_shared_returns_uuid(
+    mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock
+) -> None:
     mock_client.return_value = MagicMock()
-    note_id = sm.save_shared("Livraison Acme avant juin", source_agent="biz_manager", category="deadline")
+    note_id = sm.save_shared(
+        "Livraison Acme avant juin", source_agent="biz_manager", category="deadline"
+    )
     assert len(note_id) == 36  # format UUID
     mock_client.return_value.upsert.assert_called_once()
 
@@ -30,7 +36,9 @@ def test_save_shared_returns_uuid(mock_client: MagicMock, mock_embed: MagicMock,
 @patch("memory.shared.memory.ensure_collection")
 @patch("memory.shared.memory.embed", return_value=[0.1] * 1536)
 @patch("memory.shared.memory.get_client")
-def test_retrieve_shared_returns_results(mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock) -> None:
+def test_retrieve_shared_returns_results(
+    mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock
+) -> None:
     mock_qdrant = MagicMock()
     mock_qdrant.get_collection.return_value.points_count = 2
     mock_qdrant.search.return_value = [
@@ -49,7 +57,9 @@ def test_retrieve_shared_returns_results(mock_client: MagicMock, mock_embed: Mag
 @patch("memory.shared.memory.ensure_collection")
 @patch("memory.shared.memory.embed", return_value=[0.1] * 1536)
 @patch("memory.shared.memory.get_client")
-def test_retrieve_shared_empty_collection(mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock) -> None:
+def test_retrieve_shared_empty_collection(
+    mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock
+) -> None:
     mock_qdrant = MagicMock()
     mock_qdrant.get_collection.return_value.points_count = 0
     mock_client.return_value = mock_qdrant
@@ -61,7 +71,9 @@ def test_retrieve_shared_empty_collection(mock_client: MagicMock, mock_embed: Ma
 @patch("memory.shared.memory.ensure_collection")
 @patch("memory.shared.memory.embed", return_value=[0.1] * 1536)
 @patch("memory.shared.memory.get_client")
-def test_retrieve_shared_no_match(mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock) -> None:
+def test_retrieve_shared_no_match(
+    mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock
+) -> None:
     mock_qdrant = MagicMock()
     mock_qdrant.get_collection.return_value.points_count = 5
     mock_qdrant.search.return_value = []
@@ -74,7 +86,9 @@ def test_retrieve_shared_no_match(mock_client: MagicMock, mock_embed: MagicMock,
 @patch("memory.shared.memory.ensure_collection")
 @patch("memory.shared.memory.embed", return_value=[0.1] * 1536)
 @patch("memory.shared.memory.get_client")
-def test_retrieve_shared_filters_by_source_agent(mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock) -> None:
+def test_retrieve_shared_filters_by_source_agent(
+    mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock
+) -> None:
     mock_qdrant = MagicMock()
     mock_qdrant.get_collection.return_value.points_count = 3
     mock_qdrant.search.return_value = [
@@ -92,7 +106,9 @@ def test_retrieve_shared_filters_by_source_agent(mock_client: MagicMock, mock_em
 @patch("memory.shared.memory.ensure_collection")
 @patch("memory.shared.memory.embed", return_value=[0.1] * 1536)
 @patch("memory.shared.memory.get_client")
-def test_retrieve_shared_no_filter_when_no_source_agent(mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock) -> None:
+def test_retrieve_shared_no_filter_when_no_source_agent(
+    mock_client: MagicMock, mock_embed: MagicMock, mock_ensure: MagicMock
+) -> None:
     mock_qdrant = MagicMock()
     mock_qdrant.get_collection.return_value.points_count = 2
     mock_qdrant.search.return_value = []

@@ -1,4 +1,5 @@
 """Text extraction from uploaded files (plain text/code, PDF, DOCX)."""
+
 from __future__ import annotations
 
 import io
@@ -7,9 +8,29 @@ from pathlib import Path
 MAX_CHARS = 20_000
 
 _TEXT_EXTENSIONS = {
-    ".txt", ".md", ".py", ".js", ".ts", ".tsx", ".jsx", ".mjs",
-    ".json", ".csv", ".yaml", ".yml", ".toml", ".html", ".css",
-    ".sh", ".bash", ".zsh", ".sql", ".xml", ".rst", ".ini", ".cfg",
+    ".txt",
+    ".md",
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".mjs",
+    ".json",
+    ".csv",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".html",
+    ".css",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".sql",
+    ".xml",
+    ".rst",
+    ".ini",
+    ".cfg",
 }
 
 
@@ -44,6 +65,7 @@ def _decode(content: bytes) -> str:
 
 def _pdf(content: bytes) -> str:
     import pypdf
+
     reader = pypdf.PdfReader(io.BytesIO(content))
     pages = [page.extract_text() or "" for page in reader.pages]
     return "\n\n".join(p for p in pages if p.strip())
@@ -51,5 +73,6 @@ def _pdf(content: bytes) -> str:
 
 def _docx(content: bytes) -> str:
     import docx
+
     doc = docx.Document(io.BytesIO(content))
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip())

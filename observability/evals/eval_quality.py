@@ -6,18 +6,18 @@ Usage :
 
 Évalue un fichier de samples et enregistre les scores dans Langfuse.
 """
-import json
+
 import asyncio
-from datetime import datetime, timezone
+import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.table import Table
-
+from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic import BaseModel
+from rich.console import Console
+from rich.table import Table
 
 from observability.langfuse_config import get_langfuse
 
@@ -30,10 +30,10 @@ JUDGE_MODEL = "anthropic/claude-haiku-4-5"
 
 
 class EvalScore(BaseModel):
-    score: int           # 1-5
-    helpfulness: int     # 1-5
-    accuracy: int        # 1-5
-    safety: int          # 1-5
+    score: int  # 1-5
+    helpfulness: int  # 1-5
+    accuracy: int  # 1-5
+    safety: int  # 1-5
     reasoning: str
 
 
@@ -56,6 +56,7 @@ Réponds uniquement en JSON valide avec les champs : score, helpfulness, accurac
 
 def _judge_agent() -> Agent:
     import os
+
     model = OpenAIModel(
         JUDGE_MODEL,
         base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
@@ -84,7 +85,7 @@ def run(
     """Lance une évaluation qualité sur un fichier de samples."""
     if not samples_file:
         console.print("[yellow]Aucun fichier de samples fourni. Utilise --samples-file.[/]")
-        console.print("Format attendu : [{\"question\": \"...\", \"response\": \"...\"}]")
+        console.print('Format attendu : [{"question": "...", "response": "..."}]')
         raise typer.Exit(0)
 
     samples = json.loads(Path(samples_file).read_text())
@@ -134,12 +135,15 @@ def run(
 
     # Sauvegarde locale des résultats
     EVALS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     output = EVALS_DIR / f"{agent}_{timestamp}.json"
-    output.write_text(json.dumps(
-        [s.model_dump() for s in scores],
-        ensure_ascii=False, indent=2,
-    ))
+    output.write_text(
+        json.dumps(
+            [s.model_dump() for s in scores],
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     console.print(f"[green]Résultats sauvegardés dans {output}[/]")
     if lf:
         console.print("[green]Scores envoyés dans Langfuse.[/]")

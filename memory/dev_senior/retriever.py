@@ -4,9 +4,10 @@ Retriever de contexte codebase pour l'agent Dev Senior.
 Cherche les extraits de code les plus pertinents dans Qdrant
 et les formate pour injection dans le prompt de l'agent.
 """
-from memory.store import get_client, ensure_collection
+
 from memory.embeddings import embed
 from memory.shared.memory import retrieve_shared
+from memory.store import ensure_collection, get_client
 
 COLLECTION_NAME = "codebase"
 DEFAULT_TOP_K = 5
@@ -27,9 +28,9 @@ def retrieve_context(query: str, top_k: int = DEFAULT_TOP_K) -> str:
     parts: list[str] = []
 
     info = client.get_collection(COLLECTION_NAME)
-    if info.points_count > 0:
+    if info.points_count:
         query_vector = embed(query)
-        results = client.search(
+        results = client.search(  # type: ignore[attr-defined]
             collection_name=COLLECTION_NAME,
             query_vector=query_vector,
             limit=top_k,

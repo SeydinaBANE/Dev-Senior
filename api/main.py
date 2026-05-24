@@ -15,26 +15,28 @@ Sécurité :
     Tous les endpoints (sauf /health) requièrent le header X-API-Key
     si AGENTS_API_KEY est défini dans .env.
 """
+
 import os
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from observability.langfuse_config import configure_observability, flush as langfuse_flush
-from agents.dev_senior.agent import agent as dev_agent
 from agents.biz_manager.agent import agent as biz_agent
-from api.sessions import SessionStore
-from api.routes.dev_senior import router as dev_router
+from agents.dev_senior.agent import agent as dev_agent
+from api.metrics_store import record_request
 from api.routes.biz_manager import router as biz_router
+from api.routes.dev_senior import router as dev_router
 from api.routes.metrics import router as metrics_router
 from api.routes.slack import router as slack_router
 from api.routes.teams import router as teams_router
-from api.metrics_store import record_request
+from api.sessions import SessionStore
+from observability.langfuse_config import configure_observability
+from observability.langfuse_config import flush as langfuse_flush
 
 
 @asynccontextmanager
@@ -88,6 +90,7 @@ async def metrics_middleware(request: Request, call_next) -> Response:  # type: 
     elif "/biz-manager/" in path:
         record_request("biz-manager", latency_ms, error=response.status_code >= 400)
     return response
+
 
 # Frontend statique — monté en dernier pour ne pas masquer les routes API.
 # En prod : `make serve-prod` build le frontend puis démarre l'API.

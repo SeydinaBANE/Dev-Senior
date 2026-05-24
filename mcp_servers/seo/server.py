@@ -16,11 +16,13 @@ Outils exposés :
 - keyword_ideas     : idées de mots-clés (DataForSEO)
 - serp_analysis     : analyse des résultats pour un mot-clé
 """
-import os
+
 import base64
+import os
+
 import httpx
-from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -59,6 +61,7 @@ def _dataforseo_headers() -> dict:
 
 # ── Google Search Console ─────────────────────────────────────────────────────
 
+
 @mcp.tool()
 def top_queries(
     start_date: str,
@@ -82,7 +85,9 @@ def top_queries(
             "startDate": start_date,
             "endDate": end_date,
             "dimensions": ["query"],
-            "dimensionFilterGroups": [{"filters": [{"dimension": "country", "expression": country}]}],
+            "dimensionFilterGroups": [
+                {"filters": [{"dimension": "country", "expression": country}]}
+            ],
             "rowLimit": limit,
         }
         response = service.searchanalytics().query(siteUrl=SITE_URL, body=body).execute()
@@ -141,6 +146,7 @@ def page_performance(
 
 # ── DataForSEO ────────────────────────────────────────────────────────────────
 
+
 @mcp.tool()
 def keyword_ideas(keyword: str, language: str = "fr", location: int = 2250) -> str:
     """Génère des idées de mots-clés similaires.
@@ -153,7 +159,9 @@ def keyword_ideas(keyword: str, language: str = "fr", location: int = 2250) -> s
     if not DATAFORSEO_LOGIN:
         return "DATAFORSEO_LOGIN/PASSWORD manquants dans .env"
     try:
-        payload = [{"keyword": keyword, "language_code": language, "location_code": location, "limit": 20}]
+        payload = [
+            {"keyword": keyword, "language_code": language, "location_code": location, "limit": 20}
+        ]
         r = httpx.post(
             "https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live",
             json=payload,

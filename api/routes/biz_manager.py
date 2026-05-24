@@ -7,11 +7,11 @@ from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
 from agents.biz_manager.agent import agent
-from memory.biz_manager.context import retrieve_context, save_interaction
-from observability.langfuse_config import get_langfuse
 from api.auth import require_api_key
 from api.file_extractor import extract_text
 from api.sessions import SessionStore
+from memory.biz_manager.context import retrieve_context, save_interaction
+from observability.langfuse_config import get_langfuse
 
 router = APIRouter(prefix="/biz-manager", tags=["Business Manager"])
 
@@ -29,6 +29,7 @@ class ChatResponse(BaseModel):
 
 class TaskRequest(BaseModel):
     """Pour les appels directs depuis n8n sans session (one-shot)."""
+
     task: str
     context: str = ""
 
@@ -76,12 +77,16 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     prompt = _build_prompt(req.message, memory_context, req.document_context)
 
     lf = get_langfuse()
-    trace = lf.trace(
-        name="biz-manager-chat",
-        session_id=session_id,
-        input={"message": req.message},
-        metadata={"agent": "biz-manager"},
-    ) if lf else None
+    trace = (
+        lf.trace(
+            name="biz-manager-chat",
+            session_id=session_id,
+            input={"message": req.message},
+            metadata={"agent": "biz-manager"},
+        )
+        if lf
+        else None
+    )
 
     result = await agent.run(prompt, message_history=history)
     response = result.data
@@ -111,12 +116,16 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     prompt = _build_prompt(req.message, memory_context, req.document_context)
 
     lf = get_langfuse()
-    trace = lf.trace(
-        name="biz-manager-chat-stream",
-        session_id=session_id,
-        input={"message": req.message},
-        metadata={"agent": "biz-manager", "streaming": True},
-    ) if lf else None
+    trace = (
+        lf.trace(
+            name="biz-manager-chat-stream",
+            session_id=session_id,
+            input={"message": req.message},
+            metadata={"agent": "biz-manager", "streaming": True},
+        )
+        if lf
+        else None
+    )
 
     async def generate() -> AsyncGenerator[str, None]:
         yield f"event: session\ndata: {session_id}\n\n"
@@ -126,9 +135,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
                 async for delta in result.stream_text(delta=True):
                     chunks.append(delta)
                     yield f"data: {json.dumps(delta)}\n\n"
-                messages = ModelMessagesTypeAdapter.dump_python(
-                    result.all_messages(), mode="json"
-                )
+                messages = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
                 await sessions.set_history(session_id, messages)
             response_text = "".join(chunks)
             save_interaction(req.message, response_text)
@@ -152,11 +159,15 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
 async def run_task(req: TaskRequest) -> TaskResponse:
     """Exécution one-shot pour les workflows n8n (sans historique de session)."""
     lf = get_langfuse()
-    trace = lf.trace(
-        name="biz-manager-task",
-        input={"task": req.task},
-        metadata={"agent": "biz-manager", "type": "one-shot"},
-    ) if lf else None
+    trace = (
+        lf.trace(
+            name="biz-manager-task",
+            input={"task": req.task},
+            metadata={"agent": "biz-manager", "type": "one-shot"},
+        )
+        if lf
+        else None
+    )
 
     prompt = f"{req.context}\n\n{req.task}" if req.context else req.task
     result = await agent.run(prompt)

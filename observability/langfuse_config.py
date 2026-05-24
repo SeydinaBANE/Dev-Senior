@@ -4,7 +4,9 @@ Configuration Langfuse — tracing pour tous les agents.
 Appeler configure_observability() au démarrage.
 get_langfuse() retourne None si les clés ne sont pas configurées (tracing désactivé).
 """
+
 import os
+
 from langfuse import Langfuse
 
 _langfuse: Langfuse | None = None

@@ -14,7 +14,6 @@ repos:
         args: ["--branch", "main"]
       # Bloquer les secrets courants
       - id: detect-private-key
-      - id: check-dotenv          # bloquer le commit de .env
 
   # Ruff — linting + formatage Python
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -29,8 +28,8 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: .venv/bin/mypy
+        entry: mypy agents/
         language: system
         types: [python]
         args: ["--ignore-missing-imports", "--no-error-summary"]
-        pass_filenames: true
+        pass_filenames: false

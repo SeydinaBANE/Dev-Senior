@@ -1,7 +1,9 @@
 """
 Embeddings via OpenRouter (text-embedding-3-small, dim=1536).
 """
+
 import os
+
 import httpx
 
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
@@ -21,7 +23,7 @@ def embed(text: str) -> list[float]:
         timeout=60,
     )
     r.raise_for_status()
-    return r.json()["data"][0]["embedding"]
+    return list(r.json()["data"][0]["embedding"])
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:

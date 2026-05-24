@@ -13,13 +13,18 @@ Usage :
     await store.delete_session(session_id)
     await store.close()
 """
+
 import json
 import os
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import asyncpg
+
+if TYPE_CHECKING:
+    import redis.asyncio as aioredis
 
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))  # 60 min
 
@@ -56,13 +61,15 @@ class SessionStore(ABC):
 
 # ── Backend Redis ─────────────────────────────────────────────────────────────
 
+
 class RedisSessionStore(SessionStore):
-    def __init__(self, client: "redis.asyncio.Redis") -> None:  # type: ignore[name-defined]
+    def __init__(self, client: "aioredis.Redis") -> None:  # type: ignore[name-defined]
         self._client = client
 
     @classmethod
     async def from_url(cls, url: str) -> "RedisSessionStore":
         import redis.asyncio as aioredis
+
         client = aioredis.from_url(url, decode_responses=True)
         await client.ping()
         return cls(client)
@@ -100,6 +107,7 @@ class RedisSessionStore(SessionStore):
 
 # ── Backend PostgreSQL ────────────────────────────────────────────────────────
 
+
 class PostgresSessionStore(SessionStore):
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -107,6 +115,7 @@ class PostgresSessionStore(SessionStore):
     @classmethod
     async def create(cls) -> "PostgresSessionStore":
         from api.db import create_pool
+
         pool = await create_pool()
         return cls(pool)
 
@@ -114,31 +123,34 @@ class PostgresSessionStore(SessionStore):
         session_id = str(uuid.uuid4())
         await self._pool.execute(
             "INSERT INTO sessions (id, agent, history) VALUES ($1, $2, $3)",
-            session_id, agent, "[]",
+            session_id,
+            agent,
+            "[]",
         )
         return session_id
 
     async def get_history(self, session_id: str) -> list:
         await self._cleanup_expired()
-        row = await self._pool.fetchrow(
-            "SELECT history FROM sessions WHERE id = $1", session_id
-        )
+        row = await self._pool.fetchrow("SELECT history FROM sessions WHERE id = $1", session_id)
         if not row:
             return []
         await self._pool.execute(
             "UPDATE sessions SET updated_at = $1 WHERE id = $2",
-            datetime.now(timezone.utc), session_id,
+            datetime.now(UTC),
+            session_id,
         )
         return json.loads(row["history"])
 
     async def set_history(self, session_id: str, history: list) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await self._pool.execute(
             """INSERT INTO sessions (id, agent, history, updated_at)
                VALUES ($1, 'external', $2, $3)
                ON CONFLICT (id) DO UPDATE
                SET history = EXCLUDED.history, updated_at = EXCLUDED.updated_at""",
-            session_id, json.dumps(history), now,
+            session_id,
+            json.dumps(history),
+            now,
         )
 
     async def delete_session(self, session_id: str) -> None:
@@ -148,7 +160,7 @@ class PostgresSessionStore(SessionStore):
         await self._pool.close()
 
     async def _cleanup_expired(self) -> None:
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=SESSION_TTL_SECONDS)
+        cutoff = datetime.now(UTC) - timedelta(seconds=SESSION_TTL_SECONDS)
         await self._pool.execute("DELETE FROM sessions WHERE updated_at < $1", cutoff)
 
     @property

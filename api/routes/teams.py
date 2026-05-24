@@ -16,6 +16,7 @@ Mémoire :
   - La conversation est persistée par Teams conversation ID (session_key = teams:{conversation_id})
   - Envoyer "reset" réinitialise la mémoire de la conversation
 """
+
 import base64
 import hashlib
 import hmac
@@ -26,8 +27,8 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
-from agents.dev_senior.agent import agent as dev_agent
 from agents.biz_manager.agent import agent as biz_agent
+from agents.dev_senior.agent import agent as dev_agent
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
@@ -50,12 +51,12 @@ def _verify_signature(body: bytes, authorization: str | None) -> None:
         return  # désactivé en dev si clé absente
 
     if not authorization or not authorization.startswith("HMAC "):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Header Authorization manquant")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Header Authorization manquant"
+        )
 
     key_bytes = base64.b64decode(_WEBHOOK_KEY)
-    expected = base64.b64encode(
-        hmac.new(key_bytes, body, hashlib.sha256).digest()
-    ).decode()
+    expected = base64.b64encode(hmac.new(key_bytes, body, hashlib.sha256).digest()).decode()
 
     provided = authorization[5:]  # strip "HMAC "
     if not hmac.compare_digest(expected, provided):
