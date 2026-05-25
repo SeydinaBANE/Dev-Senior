@@ -8,13 +8,14 @@ API publique :
 - save_shared    : écrire une information dans le pool partagé
 - retrieve_shared: lire les informations pertinentes depuis le pool partagé
 """
+
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
+from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
 
-from memory.store import get_client, ensure_collection
 from memory.embeddings import embed
+from memory.store import ensure_collection, get_client
 
 COLLECTION_NAME = "shared"
 MIN_SCORE = 0.65
@@ -49,7 +50,7 @@ def save_shared(
                     "source_agent": source_agent,
                     "category": category,
                     "tags": tags,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                     "text": content,
                 },
             )
@@ -84,7 +85,7 @@ def retrieve_shared(
             must=[FieldCondition(key="source_agent", match=MatchValue(value=source_agent))]
         )
 
-    results = client.search(
+    results = client.search(  # type: ignore[attr-defined]
         collection_name=COLLECTION_NAME,
         query_vector=embed(query),
         limit=top_k,

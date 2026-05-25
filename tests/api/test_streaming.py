@@ -1,4 +1,5 @@
 """Tests for SSE streaming endpoints (/chat/stream)."""
+
 import json
 import sys
 from contextlib import asynccontextmanager
@@ -33,8 +34,8 @@ def _stub_memory() -> None:
 _stub_agents()
 _stub_memory()
 
-from api.routes.dev_senior import router as dev_router  # noqa: E402
 from api.routes.biz_manager import router as biz_router  # noqa: E402
+from api.routes.dev_senior import router as dev_router  # noqa: E402
 from api.sessions import SessionStore  # noqa: E402
 
 
@@ -58,6 +59,7 @@ def client() -> TestClient:
 
 def _mock_stream_agent(chunks: list[str]) -> MagicMock:
     """Crée un agent mock dont run_stream() yield les chunks donnés."""
+
     async def _stream_text(delta: bool = False):
         for chunk in chunks:
             yield chunk
@@ -95,6 +97,7 @@ def _parse_sse(raw: str) -> list[dict]:
 
 # ── Dev Senior ────────────────────────────────────────────────────────────────
 
+
 def test_dev_senior_stream_sends_session_first(client: TestClient) -> None:
     mock_agent = _mock_stream_agent(["Hello", " World"])
     with patch("api.routes.dev_senior.agent", mock_agent):
@@ -118,7 +121,9 @@ def test_dev_senior_stream_yields_chunks(client: TestClient) -> None:
                 json={"message": "test", "session_id": ""},
             )
     events = _parse_sse(r.text)
-    chunks = [json.loads(e["data"]) for e in events if e.get("event") is None and e["data"] != "[DONE]"]
+    chunks = [
+        json.loads(e["data"]) for e in events if e.get("event") is None and e["data"] != "[DONE]"
+    ]
     assert chunks == ["Bon", "jour"]
 
 
@@ -171,6 +176,7 @@ def test_dev_senior_stream_content_type(client: TestClient) -> None:
 
 # ── Biz Manager ───────────────────────────────────────────────────────────────
 
+
 def test_biz_manager_stream_yields_chunks(client: TestClient) -> None:
     mock_agent = _mock_stream_agent(["Super", " idée"])
     with patch("api.routes.biz_manager.agent", mock_agent):
@@ -181,7 +187,9 @@ def test_biz_manager_stream_yields_chunks(client: TestClient) -> None:
                     json={"message": "test", "session_id": ""},
                 )
     events = _parse_sse(r.text)
-    chunks = [json.loads(e["data"]) for e in events if e.get("event") is None and e["data"] != "[DONE]"]
+    chunks = [
+        json.loads(e["data"]) for e in events if e.get("event") is None and e["data"] != "[DONE]"
+    ]
     assert chunks == ["Super", " idée"]
 
 

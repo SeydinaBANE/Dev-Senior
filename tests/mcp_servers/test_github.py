@@ -1,8 +1,11 @@
 """
 Tests des outils GitHub — utilise un mock httpx pour éviter les appels réseau.
 """
+
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from mcp_servers.github import server as gh
 
 

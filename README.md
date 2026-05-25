@@ -44,15 +44,15 @@ make healthcheck
 ## Les deux agents
 
 ### Agent Dev Senior
-**Utilisateurs :** équipe technique  
-**Capacités :** développement complexe, architecture, debugging, code reviews, refactoring, documentation  
-**Modèle :** `qwen/qwen-2.5-coder-7b-instruct` via OpenRouter  
+**Utilisateurs :** équipe technique
+**Capacités :** développement complexe, architecture, debugging, code reviews, refactoring, documentation
+**Modèle :** `qwen/qwen-2.5-coder-7b-instruct` via OpenRouter
 **Mémoire :** RAG sur la codebase indexée dans Qdrant + contexte partagé avec le Biz Manager
 
 ### Agent Business Manager
-**Utilisateurs :** business managers, stagiaires  
-**Capacités :** marketing digital, SEO, réseaux sociaux, contenu, emails, CRM, automatisation  
-**Modèle :** `meta-llama/llama-3.1-8b-instruct` via OpenRouter  
+**Utilisateurs :** business managers, stagiaires
+**Capacités :** marketing digital, SEO, réseaux sociaux, contenu, emails, CRM, automatisation
+**Modèle :** `meta-llama/llama-3.1-8b-instruct` via OpenRouter
 **Mémoire :** historique des interactions mémorisé automatiquement dans Qdrant + contexte partagé avec Dev Senior
 
 ---
@@ -146,7 +146,7 @@ Slack reçoit un accusé immédiat ; la réponse de l'agent est postée en diff�
 **Mémoire par canal :** chaque utilisateur conserve un fil de conversation persistant par canal Slack (clé `slack:{channel_id}:{user_id}`). Envoyer `/dev-senior reset` efface la mémoire.
 
 ### Intégration Teams
-Créer un outgoing webhook Teams pointant vers `POST /teams/message`.  
+Créer un outgoing webhook Teams pointant vers `POST /teams/message`.
 Routage par mention : `@dev-senior <message>` ou `@biz-manager <message>`.
 
 **Mémoire par conversation :** l'historique est conservé par conversation Teams (clé `teams:{conversation_id}`). Envoyer `reset` dans la conversation réinitialise la mémoire.

@@ -106,7 +106,7 @@ TEAMS_WEBHOOK_KEY=
 
 ### 2.4 Domaine public
 
-Service API → **Settings** → **Networking** → **Generate Domain**  
+Service API → **Settings** → **Networking** → **Generate Domain**
 → noter l'URL publique, ex. `https://dev-senior-api.up.railway.app`
 
 ### 2.5 Vérifier le déploiement
@@ -169,7 +169,7 @@ Railway redéploie automatiquement.
 
 ## 5. Indexer la codebase dans Qdrant
 
-L'indexation RAG ne se fait pas automatiquement au déploiement.  
+L'indexation RAG ne se fait pas automatiquement au déploiement.
 Depuis la machine locale (avec `QDRANT_HOST` pointant sur Railway/Qdrant Cloud) :
 
 ```bash
@@ -217,7 +217,7 @@ Mettre à jour les headers `X-API-Key` dans les workflows n8n importés.
 
 ## 8. CI/CD GitHub Actions
 
-Le fichier `.github/workflows/deploy.yml` existant cible un self-hosted runner (Mac mini M4).  
+Le fichier `.github/workflows/deploy.yml` existant cible un self-hosted runner (Mac mini M4).
 Pour Railway/Vercel, le déploiement est déclenché automatiquement par push sur `main` — pas besoin de modifier le workflow de déploiement.
 
 Le workflow CI (`.github/workflows/ci.yml`) continue de tourner normalement.

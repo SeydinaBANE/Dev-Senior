@@ -2,11 +2,13 @@
 Tests de smoke : vérifient que les agents s'initialisent correctement.
 Pas d'appel réseau — utilise TestModel de Pydantic AI.
 """
+
 import pytest
-from pydantic_ai.models.test import TestModel
 from pydantic_ai import Agent
-from agents.dev_senior.prompts import SYSTEM_PROMPT as DEV_PROMPT
+from pydantic_ai.models.test import TestModel
+
 from agents.biz_manager.prompts import SYSTEM_PROMPT as BIZ_PROMPT
+from agents.dev_senior.prompts import SYSTEM_PROMPT as DEV_PROMPT
 
 
 @pytest.fixture

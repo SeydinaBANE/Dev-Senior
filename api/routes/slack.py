@@ -15,6 +15,7 @@ Fonctionnement :
   - La mémoire de conversation est persistée par canal+utilisateur (session_key = slack:{channel_id}:{user_id})
   - Envoyer "reset" réinitialise la mémoire du canal pour cet utilisateur
 """
+
 import hashlib
 import hmac
 import os
@@ -26,8 +27,8 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
-from agents.dev_senior.agent import agent as dev_agent
 from agents.biz_manager.agent import agent as biz_agent
+from agents.dev_senior.agent import agent as dev_agent
 
 if TYPE_CHECKING:
     from api.sessions import SessionStore
@@ -56,9 +57,7 @@ def _verify_signature(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Timestamp expiré")
 
     base = f"v0:{timestamp}:{body.decode()}"
-    expected = "v0=" + hmac.new(
-        _SIGNING_SECRET.encode(), base.encode(), hashlib.sha256
-    ).hexdigest()
+    expected = "v0=" + hmac.new(_SIGNING_SECRET.encode(), base.encode(), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(expected, signature or ""):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Signature invalide")
@@ -120,7 +119,10 @@ async def slack_command(
 
     if text.lower() == "reset":
         await sessions.delete_session(session_key)
-        return {"response_type": "ephemeral", "text": ":recycle: Mémoire de la conversation réinitialisée."}
+        return {
+            "response_type": "ephemeral",
+            "text": ":recycle: Mémoire de la conversation réinitialisée.",
+        }
 
     # Ack immédiat pour respecter le délai 3s de Slack
     background_tasks.add_task(

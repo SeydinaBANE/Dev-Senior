@@ -13,10 +13,11 @@ Outils exposés :
 Auth : OAuth2 via credentials.json (à générer depuis Google Cloud Console).
 Le token est mis en cache dans token.json (gitignore).
 """
-import os
+
 import base64
+import os
+from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
-from datetime import datetime, timedelta, timezone
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -47,8 +48,7 @@ def _get_credentials() -> Credentials:
         else:
             if not os.path.exists(CREDENTIALS_FILE):
                 raise RuntimeError(
-                    f"{CREDENTIALS_FILE} introuvable. "
-                    "Télécharge-le depuis Google Cloud Console."
+                    f"{CREDENTIALS_FILE} introuvable. Télécharge-le depuis Google Cloud Console."
                 )
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0)
@@ -58,6 +58,7 @@ def _get_credentials() -> Credentials:
 
 
 # ── Google Drive ──────────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def list_drive_files(query: str = "", max_results: int = 20) -> str:
@@ -70,16 +71,22 @@ def list_drive_files(query: str = "", max_results: int = 20) -> str:
     try:
         service = build("drive", "v3", credentials=_get_credentials())
         q = f"name contains '{query}' and trashed=false" if query else "trashed=false"
-        results = service.files().list(
-            q=q,
-            pageSize=max_results,
-            fields="files(id, name, mimeType, modifiedTime)",
-            orderBy="modifiedTime desc",
-        ).execute()
+        results = (
+            service.files()
+            .list(
+                q=q,
+                pageSize=max_results,
+                fields="files(id, name, mimeType, modifiedTime)",
+                orderBy="modifiedTime desc",
+            )
+            .execute()
+        )
         files = results.get("files", [])
         if not files:
             return "Aucun fichier trouvé."
-        lines = [f"[{f['id']}] {f['name']} ({f['mimeType']}) — {f['modifiedTime'][:10]}" for f in files]
+        lines = [
+            f"[{f['id']}] {f['name']} ({f['mimeType']}) — {f['modifiedTime'][:10]}" for f in files
+        ]
         return "\n".join(lines)
     except HttpError as e:
         return f"Erreur Drive : {e}"
@@ -130,6 +137,7 @@ def create_drive_doc(title: str, content: str) -> str:
 
 # ── Gmail ─────────────────────────────────────────────────────────────────────
 
+
 @mcp.tool()
 def list_emails(query: str = "is:unread", max_results: int = 10) -> str:
     """Recherche des emails dans Gmail.
@@ -140,19 +148,26 @@ def list_emails(query: str = "is:unread", max_results: int = 10) -> str:
     """
     try:
         service = build("gmail", "v1", credentials=_get_credentials())
-        results = service.users().messages().list(
-            userId="me", q=query, maxResults=max_results
-        ).execute()
+        results = (
+            service.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
+        )
         messages = results.get("messages", [])
         if not messages:
             return "Aucun email trouvé."
 
         lines = []
         for msg in messages:
-            detail = service.users().messages().get(
-                userId="me", id=msg["id"], format="metadata",
-                metadataHeaders=["From", "Subject", "Date"],
-            ).execute()
+            detail = (
+                service.users()
+                .messages()
+                .get(
+                    userId="me",
+                    id=msg["id"],
+                    format="metadata",
+                    metadataHeaders=["From", "Subject", "Date"],
+                )
+                .execute()
+            )
             headers = {h["name"]: h["value"] for h in detail["payload"]["headers"]}
             lines.append(
                 f"[{msg['id']}] {headers.get('Date', '')[:16]} "
@@ -186,6 +201,7 @@ def send_email(to: str, subject: str, body: str) -> str:
 
 # ── Google Calendar ───────────────────────────────────────────────────────────
 
+
 @mcp.tool()
 def list_events(days_ahead: int = 7, max_results: int = 20) -> str:
     """Retourne les événements Google Calendar à venir.
@@ -196,16 +212,20 @@ def list_events(days_ahead: int = 7, max_results: int = 20) -> str:
     """
     try:
         service = build("calendar", "v3", credentials=_get_credentials())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         end = now + timedelta(days=days_ahead)
-        events_result = service.events().list(
-            calendarId="primary",
-            timeMin=now.isoformat(),
-            timeMax=end.isoformat(),
-            maxResults=max_results,
-            singleEvents=True,
-            orderBy="startTime",
-        ).execute()
+        events_result = (
+            service.events()
+            .list(
+                calendarId="primary",
+                timeMin=now.isoformat(),
+                timeMax=end.isoformat(),
+                maxResults=max_results,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
         events = events_result.get("items", [])
         if not events:
             return f"Aucun événement dans les {days_ahead} prochains jours."

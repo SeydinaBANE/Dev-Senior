@@ -2,8 +2,11 @@
 Tests du cron d'évaluation automatique.
 Mock Langfuse, judge_interaction et eval_drift pour éviter tout appel réseau.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
+
 from observability.evals import cron_eval as ce
 from observability.evals.eval_quality import EvalScore
 
@@ -20,6 +23,7 @@ def _make_trace(question: str, response: str) -> MagicMock:
 
 
 # ── _fetch_traces ─────────────────────────────────────────────────────────────
+
 
 @patch("observability.evals.cron_eval.get_langfuse")
 def test_fetch_traces_no_langfuse(mock_lf: MagicMock) -> None:
@@ -65,6 +69,7 @@ def test_fetch_traces_handles_exception(mock_lf: MagicMock) -> None:
 
 # ── _check_drift ──────────────────────────────────────────────────────────────
 
+
 @patch("observability.evals.cron_eval.load_baseline")
 def test_check_drift_no_baseline(mock_baseline: MagicMock) -> None:
     mock_baseline.return_value = None
@@ -90,6 +95,7 @@ def test_check_drift_detects_regression(mock_baseline: MagicMock) -> None:
 
 
 # ── _eval_agent ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 @patch("observability.evals.cron_eval.get_langfuse", return_value=None)

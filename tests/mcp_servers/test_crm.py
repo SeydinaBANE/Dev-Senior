@@ -1,7 +1,9 @@
 """
 Tests des outils CRM (HubSpot) — mock httpx pour éviter les appels réseau.
 """
+
 from unittest.mock import MagicMock, patch
+
 from mcp_servers.crm import server as crm
 
 
@@ -19,18 +21,25 @@ def _mock_get(json_data: dict) -> MagicMock:
 
 # ── search_contacts ───────────────────────────────────────────────────────────
 
+
 @patch("mcp_servers.crm.server.CRM_API_KEY", "test-key")
 @patch("httpx.post")
 def test_search_contacts_returns_results(mock_post: MagicMock) -> None:
-    mock_post.return_value = _mock_post({
-        "results": [{
-            "id": "1",
-            "properties": {
-                "firstname": "Alice", "lastname": "Durand",
-                "email": "alice@example.com", "company": "Acme",
-            },
-        }]
-    })
+    mock_post.return_value = _mock_post(
+        {
+            "results": [
+                {
+                    "id": "1",
+                    "properties": {
+                        "firstname": "Alice",
+                        "lastname": "Durand",
+                        "email": "alice@example.com",
+                        "company": "Acme",
+                    },
+                }
+            ]
+        }
+    )
     result = crm.search_contacts("alice")
     assert "Alice" in result
     assert "alice@example.com" in result
@@ -52,12 +61,13 @@ def test_search_contacts_no_key() -> None:
 
 # ── get_contact ───────────────────────────────────────────────────────────────
 
+
 @patch("mcp_servers.crm.server.CRM_API_KEY", "test-key")
 @patch("httpx.get")
 def test_get_contact_returns_properties(mock_get: MagicMock) -> None:
-    mock_get.return_value = _mock_get({
-        "properties": {"firstname": "Bob", "email": "bob@example.com", "company": "Corp"}
-    })
+    mock_get.return_value = _mock_get(
+        {"properties": {"firstname": "Bob", "email": "bob@example.com", "company": "Corp"}}
+    )
     result = crm.get_contact("42")
     assert "Bob" in result
     assert "bob@example.com" in result
@@ -70,6 +80,7 @@ def test_get_contact_no_key() -> None:
 
 
 # ── create_contact ────────────────────────────────────────────────────────────
+
 
 @patch("mcp_servers.crm.server.CRM_API_KEY", "test-key")
 @patch("httpx.post")
@@ -87,18 +98,25 @@ def test_create_contact_no_key() -> None:
 
 # ── list_deals ────────────────────────────────────────────────────────────────
 
+
 @patch("mcp_servers.crm.server.CRM_API_KEY", "test-key")
 @patch("httpx.post")
 def test_list_deals_returns_results(mock_post: MagicMock) -> None:
-    mock_post.return_value = _mock_post({
-        "results": [{
-            "id": "10",
-            "properties": {
-                "dealname": "Contrat Acme", "amount": "5000",
-                "dealstage": "closedwon", "closedate": "2026-06-01T00:00:00Z",
-            },
-        }]
-    })
+    mock_post.return_value = _mock_post(
+        {
+            "results": [
+                {
+                    "id": "10",
+                    "properties": {
+                        "dealname": "Contrat Acme",
+                        "amount": "5000",
+                        "dealstage": "closedwon",
+                        "closedate": "2026-06-01T00:00:00Z",
+                    },
+                }
+            ]
+        }
+    )
     result = crm.list_deals()
     assert "Contrat Acme" in result
     assert "5000" in result
@@ -119,6 +137,7 @@ def test_list_deals_no_key() -> None:
 
 
 # ── create_note ───────────────────────────────────────────────────────────────
+
 
 @patch("mcp_servers.crm.server.CRM_API_KEY", "test-key")
 @patch("httpx.post")

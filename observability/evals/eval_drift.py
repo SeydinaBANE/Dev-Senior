@@ -7,6 +7,7 @@ Lance une alerte (console + fichier) si la qualité chute.
 Usage :
     python -m observability.evals.eval_drift --agent dev-senior --threshold 0.5
 """
+
 import json
 from pathlib import Path
 from statistics import mean
@@ -39,9 +40,7 @@ def load_baseline(agent: str) -> dict | None:
 
 def save_baseline(agent: str, metrics: dict) -> None:
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
-    (BASELINE_DIR / f"{agent}_baseline.json").write_text(
-        json.dumps(metrics, indent=2)
-    )
+    (BASELINE_DIR / f"{agent}_baseline.json").write_text(json.dumps(metrics, indent=2))
 
 
 def compute_metrics(scores: list[dict]) -> dict:
@@ -75,7 +74,9 @@ def detect(
 
     baseline = load_baseline(agent)
     if not baseline:
-        console.print(f"[yellow]Aucune baseline pour '{agent}'. Lance avec --set-baseline d'abord.[/]")
+        console.print(
+            f"[yellow]Aucune baseline pour '{agent}'. Lance avec --set-baseline d'abord.[/]"
+        )
         raise typer.Exit(1)
 
     console.print(f"\n[bold]Détection de dérive — {agent}[/]")
@@ -89,7 +90,9 @@ def detect(
         status = "✓" if delta >= -threshold else "⚠ DÉRIVE"
         if delta < -threshold:
             drifts.append((metric, base_val, curr_val, delta))
-        console.print(f"{metric:<15} {base_val:>10.2f} {curr_val:>10.2f} {delta:>+10.2f} {status:>10}")
+        console.print(
+            f"{metric:<15} {base_val:>10.2f} {curr_val:>10.2f} {delta:>+10.2f} {status:>10}"
+        )
 
     if drifts:
         console.print(f"\n[bold red]ALERTE : {len(drifts)} métrique(s) en dérive :[/]")

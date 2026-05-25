@@ -1,6 +1,8 @@
 import sys
+
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStdio
+
 from agents.config import dev_senior_model
 from agents.dev_senior.prompts import SYSTEM_PROMPT
 

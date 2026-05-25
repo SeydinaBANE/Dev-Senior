@@ -10,7 +10,9 @@ Outils exposés :
 - create_issue    : créer une issue
 - recent_commits  : historique des commits
 """
+
 import os
+
 from github import Github, GithubException
 from mcp.server.fastmcp import FastMCP
 
@@ -29,6 +31,7 @@ def _client() -> Github:
 
 
 # ── Outils ───────────────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 def list_prs(repo: str, state: str = "open") -> str:
@@ -113,7 +116,7 @@ def list_issues(repo: str, state: str = "open", labels: str = "") -> str:
     try:
         kwargs: dict = {"state": state}
         if labels:
-            kwargs["labels"] = [l.strip() for l in labels.split(",")]
+            kwargs["labels"] = [lbl.strip() for lbl in labels.split(",")]
         issues = _client().get_repo(repo).get_issues(**kwargs)
         lines = [f"#{i.number} {i.title} — {i.user.login}" for i in issues if not i.pull_request]
         return "\n".join(lines) if lines else "Aucune issue trouvée."
@@ -134,7 +137,7 @@ def create_issue(repo: str, title: str, body: str, labels: str = "") -> str:
     try:
         kwargs: dict = {"title": title, "body": body}
         if labels:
-            kwargs["labels"] = [l.strip() for l in labels.split(",")]
+            kwargs["labels"] = [lbl.strip() for lbl in labels.split(",")]
         issue = _client().get_repo(repo).create_issue(**kwargs)
         return f"Issue créée : #{issue.number} — {issue.html_url}"
     except GithubException as e:

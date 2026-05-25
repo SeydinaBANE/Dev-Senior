@@ -4,23 +4,24 @@ Indexeur de codebase pour l'agent Dev Senior.
 Usage :
     python -m memory.dev_senior.indexer --path /chemin/vers/repo
 """
+
 import hashlib
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 import typer
+from qdrant_client.models import (
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PointStruct,
+)
 from rich.console import Console
 from rich.progress import track
-from qdrant_client.models import (
-    PointStruct,
-    Filter,
-    FieldCondition,
-    MatchValue,
-    FilterSelector,
-)
 
-from memory.store import get_client, ensure_collection
-from memory.embeddings import embed_batch, chunk_text
+from memory.embeddings import chunk_text, embed_batch
+from memory.store import ensure_collection, get_client
 
 app = typer.Typer()
 console = Console()
@@ -28,14 +29,41 @@ console = Console()
 COLLECTION_NAME = "codebase"
 
 SUPPORTED_EXTENSIONS = {
-    ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java",
-    ".kt", ".swift", ".c", ".cpp", ".h", ".cs", ".rb", ".php",
-    ".md", ".yaml", ".yml", ".toml", ".json", ".sql",
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".cs",
+    ".rb",
+    ".php",
+    ".md",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".json",
+    ".sql",
 }
 
 IGNORED_DIRS = {
-    ".git", ".venv", "venv", "node_modules", "__pycache__",
-    ".mypy_cache", ".ruff_cache", ".pytest_cache", "dist", "build",
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
     "memory/vector_store",
 }
 
@@ -96,7 +124,11 @@ def index(
                     limit=1,
                     with_payload=True,
                 )
-                if existing and existing[0].payload and existing[0].payload.get("hash") == content_hash:
+                if (
+                    existing
+                    and existing[0].payload
+                    and existing[0].payload.get("hash") == content_hash
+                ):
                     skipped += 1
                     continue
                 # Supprime l'ancienne version avant réindexation

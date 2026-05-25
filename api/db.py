@@ -2,7 +2,9 @@
 Pool de connexions asyncpg pour PostgreSQL.
 Initialisé dans le lifespan de FastAPI.
 """
+
 import os
+
 import asyncpg
 from fastapi import Request
 

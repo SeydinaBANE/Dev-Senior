@@ -11,7 +11,9 @@ Outils exposés :
 - list_deals       : lister les opportunités
 - create_note      : ajouter une note sur un contact
 """
+
 import os
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
@@ -30,6 +32,7 @@ def _hubspot_headers() -> dict:
 
 # ── HubSpot ───────────────────────────────────────────────────────────────────
 
+
 @mcp.tool()
 def search_contacts(query: str) -> str:
     """Recherche des contacts dans le CRM.
@@ -41,9 +44,13 @@ def search_contacts(query: str) -> str:
         return "CRM_API_KEY manquant dans .env"
     try:
         payload = {
-            "filterGroups": [{
-                "filters": [{"propertyName": "email", "operator": "CONTAINS_TOKEN", "value": query}]
-            }],
+            "filterGroups": [
+                {
+                    "filters": [
+                        {"propertyName": "email", "operator": "CONTAINS_TOKEN", "value": query}
+                    ]
+                }
+            ],
             "properties": ["firstname", "lastname", "email", "company", "phone"],
             "limit": 20,
         }
@@ -105,7 +112,14 @@ def create_contact(email: str, firstname: str = "", lastname: str = "", company:
     if not CRM_API_KEY:
         return "CRM_API_KEY manquant dans .env"
     try:
-        payload = {"properties": {"email": email, "firstname": firstname, "lastname": lastname, "company": company}}
+        payload = {
+            "properties": {
+                "email": email,
+                "firstname": firstname,
+                "lastname": lastname,
+                "company": company,
+            }
+        }
         r = httpx.post(
             f"{HUBSPOT_BASE}/crm/v3/objects/contacts",
             json=payload,
@@ -134,9 +148,9 @@ def list_deals(stage: str = "") -> str:
             "limit": 30,
         }
         if stage:
-            payload["filterGroups"] = [{
-                "filters": [{"propertyName": "dealstage", "operator": "EQ", "value": stage}]
-            }]
+            payload["filterGroups"] = [
+                {"filters": [{"propertyName": "dealstage", "operator": "EQ", "value": stage}]}
+            ]
         r = httpx.post(
             f"{HUBSPOT_BASE}/crm/v3/objects/deals/search",
             json=payload,
@@ -172,7 +186,12 @@ def create_note(contact_id: str, note: str) -> str:
     try:
         payload = {
             "properties": {"hs_note_body": note, "hs_timestamp": "now"},
-            "associations": [{"to": {"id": contact_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}]}],
+            "associations": [
+                {
+                    "to": {"id": contact_id},
+                    "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}],
+                }
+            ],
         }
         r = httpx.post(
             f"{HUBSPOT_BASE}/crm/v3/objects/notes",

@@ -1,4 +1,5 @@
 """Tests for Microsoft Teams outgoing webhook integration."""
+
 import base64
 import hashlib
 import hmac
@@ -24,7 +25,8 @@ _stub_agents()
 import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from api.routes.teams import router, _parse_agent_and_text  # noqa: E402
+
+from api.routes.teams import _parse_agent_and_text, router  # noqa: E402
 
 
 def _make_sessions() -> MagicMock:
@@ -54,6 +56,7 @@ def _teams_auth(body: bytes, key: str = _KEY) -> str:
 
 # ── /teams/health ─────────────────────────────────────────────────────────────
 
+
 def test_health_not_configured(client: TestClient) -> None:
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
         r = client.get("/teams/health")
@@ -69,6 +72,7 @@ def test_health_configured(client: TestClient) -> None:
 
 
 # ── _parse_agent_and_text ─────────────────────────────────────────────────────
+
 
 def test_parse_dev_senior_mention() -> None:
     agent, text = _parse_agent_and_text("@dev-senior explique ce code")
@@ -97,6 +101,7 @@ def test_parse_strips_html_tags() -> None:
 
 # ── /teams/message ────────────────────────────────────────────────────────────
 
+
 def test_message_empty_text(client: TestClient) -> None:
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
         r = client.post("/teams/message", json={"type": "message", "text": ""})
@@ -114,7 +119,11 @@ def test_message_routes_to_dev_senior(client: TestClient) -> None:
             mock_agent.run = AsyncMock(return_value=mock_result)
             r = client.post(
                 "/teams/message",
-                json={"type": "message", "text": "@dev-senior explique ce code", "conversation": {"id": "conv-1"}},
+                json={
+                    "type": "message",
+                    "text": "@dev-senior explique ce code",
+                    "conversation": {"id": "conv-1"},
+                },
             )
 
     assert r.status_code == 200
@@ -132,7 +141,11 @@ def test_message_routes_to_biz_manager(client: TestClient) -> None:
             mock_agent.run = AsyncMock(return_value=mock_result)
             r = client.post(
                 "/teams/message",
-                json={"type": "message", "text": "@biz-manager analyse ce lead", "conversation": {"id": "conv-2"}},
+                json={
+                    "type": "message",
+                    "text": "@biz-manager analyse ce lead",
+                    "conversation": {"id": "conv-2"},
+                },
             )
 
     assert r.status_code == 200
