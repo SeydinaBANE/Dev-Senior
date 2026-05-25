@@ -51,7 +51,8 @@ def test_list_prs_empty(mock_gh_cls: MagicMock) -> None:
 
 def test_list_prs_no_token() -> None:
     with patch.dict("os.environ", {}, clear=True):
-        result = gh.list_prs("owner/repo")
+        with patch("mcp_servers.github.server._gh", None):
+            result = gh.list_prs("owner/repo")
     assert "GITHUB_TOKEN" in result
 
 

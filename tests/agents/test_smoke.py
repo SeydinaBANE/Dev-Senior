@@ -23,12 +23,12 @@ def biz_agent() -> Agent:
 
 async def test_dev_senior_responds(dev_agent: Agent) -> None:
     result = await dev_agent.run("Bonjour, qui es-tu ?")
-    assert result.data is not None
+    assert result.output is not None
 
 
 async def test_biz_manager_responds(biz_agent: Agent) -> None:
     result = await biz_agent.run("Bonjour, qui es-tu ?")
-    assert result.data is not None
+    assert result.output is not None
 
 
 def test_dev_prompt_not_empty() -> None:

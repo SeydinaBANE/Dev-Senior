@@ -33,6 +33,7 @@ import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from api.auth import require_api_key  # noqa: E402
 from api.routes.biz_manager import router as biz_router  # noqa: E402
 from api.routes.dev_senior import router as dev_router  # noqa: E402
 
@@ -42,6 +43,7 @@ def client() -> TestClient:
     app = FastAPI()
     app.include_router(dev_router)
     app.include_router(biz_router)
+    app.dependency_overrides[require_api_key] = lambda: None
     return TestClient(app)
 
 

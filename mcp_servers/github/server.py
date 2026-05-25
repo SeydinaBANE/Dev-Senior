@@ -45,6 +45,8 @@ def list_prs(repo: str, state: str = "open") -> str:
         pulls = _client().get_repo(repo).get_pulls(state=state)
         lines = [f"#{pr.number} [{pr.state}] {pr.title} — {pr.user.login}" for pr in pulls]
         return "\n".join(lines) if lines else "Aucune PR trouvée."
+    except RuntimeError as e:
+        return str(e)
     except GithubException as e:
         return f"Erreur GitHub : {e.data.get('message', str(e))}"
 
@@ -66,6 +68,8 @@ def get_pr_diff(repo: str, pr_number: int) -> str:
             if f.patch:
                 parts.append(f.patch)
         return "\n".join(parts)
+    except RuntimeError as e:
+        return str(e)
     except GithubException as e:
         return f"Erreur GitHub : {e.data.get('message', str(e))}"
 
@@ -84,6 +88,8 @@ def read_file(repo: str, path: str, ref: str = "main") -> str:
         if isinstance(content, list):
             return "\n".join(f.path for f in content)
         return content.decoded_content.decode("utf-8")
+    except RuntimeError as e:
+        return str(e)
     except GithubException as e:
         return f"Erreur GitHub : {e.data.get('message', str(e))}"
 
@@ -100,6 +106,8 @@ def search_code(repo: str, query: str) -> str:
         results = _client().search_code(f"{query} repo:{repo}")
         lines = [f"{r.path}:{r.name}" for r in results]
         return "\n".join(lines[:20]) if lines else "Aucun résultat."
+    except RuntimeError as e:
+        return str(e)
     except GithubException as e:
         return f"Erreur GitHub : {e.data.get('message', str(e))}"
 
@@ -120,6 +128,8 @@ def list_issues(repo: str, state: str = "open", labels: str = "") -> str:
         issues = _client().get_repo(repo).get_issues(**kwargs)
         lines = [f"#{i.number} {i.title} — {i.user.login}" for i in issues if not i.pull_request]
         return "\n".join(lines) if lines else "Aucune issue trouvée."
+    except RuntimeError as e:
+        return str(e)
     except GithubException as e:
         return f"Erreur GitHub : {e.data.get('message', str(e))}"
 
@@ -140,6 +150,8 @@ def create_issue(repo: str, title: str, body: str, labels: str = "") -> str:
             kwargs["labels"] = [lbl.strip() for lbl in labels.split(",")]
         issue = _client().get_repo(repo).create_issue(**kwargs)
         return f"Issue créée : #{issue.number} — {issue.html_url}"
+    except RuntimeError as e:
+        return str(e)
     except GithubException as e:
         return f"Erreur GitHub : {e.data.get('message', str(e))}"
 
@@ -160,6 +172,8 @@ def recent_commits(repo: str, branch: str = "main", limit: int = 10) -> str:
             for c in list(commits)[: min(limit, 50)]
         ]
         return "\n".join(lines)
+    except RuntimeError as e:
+        return str(e)
     except GithubException as e:
         return f"Erreur GitHub : {e.data.get('message', str(e))}"
 

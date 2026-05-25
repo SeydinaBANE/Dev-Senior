@@ -34,6 +34,7 @@ def _stub_memory() -> None:
 _stub_agents()
 _stub_memory()
 
+from api.auth import require_api_key  # noqa: E402
 from api.routes.biz_manager import router as biz_router  # noqa: E402
 from api.routes.dev_senior import router as dev_router  # noqa: E402
 from api.sessions import SessionStore  # noqa: E402
@@ -43,6 +44,7 @@ def _make_app() -> FastAPI:
     app = FastAPI()
     app.include_router(dev_router)
     app.include_router(biz_router)
+    app.dependency_overrides[require_api_key] = lambda: None
 
     mock_sessions = MagicMock(spec=SessionStore)
     mock_sessions.new_session = AsyncMock(return_value="test-session-id")
