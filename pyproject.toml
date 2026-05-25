@@ -27,7 +27,7 @@ dependencies = [
     "asyncpg>=0.29.0",
     "redis[asyncio]>=5.0.0",
     # Observabilité
-    "langfuse>=2.0.0",
+    "langfuse>=2.0.0,<3.0.0",
     # API HTTP (pour n8n + frontend statique)
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",

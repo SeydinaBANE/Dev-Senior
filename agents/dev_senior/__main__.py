@@ -41,7 +41,7 @@ async def chat_loop() -> None:
             with console.status("Réflexion..."):
                 result = await agent.run(prompt, message_history=history)
 
-            response = result.data
+            response = result.output
             if trace:
                 try:
                     trace.update(output={"response": response})
