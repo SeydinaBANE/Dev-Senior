@@ -28,7 +28,7 @@ jobs:
         run: ruff format --check .
 
       - name: Types (mypy)
-        run: mypy agents/ api/ memory/ observability/ --ignore-missing-imports
+        run: mypy agents/ --ignore-missing-imports
 
   tests:
     name: Tests

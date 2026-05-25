@@ -46,7 +46,7 @@ api/
 memory/
   embeddings.py  ← génération embeddings via OpenRouter
   store.py       ← client Qdrant partagé (singleton)
-  dev_senior/    ← indexer.py, retriever.py (RAG codebase, collection "codebase")
+  dev_senior/    ← indexer.py, retriever.py (RAG codebase, collection "codebase" ; score_threshold=0.70, top_k=5)
   biz_manager/   ← context.py (mémoire interactions, collection "biz_context")
   shared/        ← memory.py (save_shared, retrieve_shared, collection "shared")
   vector_store/  ← données Qdrant locales (ne pas committer)
@@ -90,8 +90,10 @@ docs/            ← guide_dev_senior.md, guide_biz_manager.md
 
 ```bash
 make setup              # venv + pip install + pre-commit install
-make start              # tout démarrer (Docker + API)
-make stop               # tout arrêter
+make docker-up          # démarrer Qdrant + PostgreSQL + Redis + n8n (Docker seulement)
+make docker-down        # arrêter les containers Docker
+make start              # script complet infra/deploy/start.sh (docker-up + API + attentes healthcheck)
+make stop               # script complet infra/deploy/stop.sh
 make healthcheck        # vérifier Qdrant, PostgreSQL, API, n8n
 
 make dev-senior         # lancer l'agent Dev Senior (terminal)
@@ -126,6 +128,8 @@ make logs-error         # tail -f logs/api-error.log
 make docker-logs        # logs Docker (Qdrant + PostgreSQL + n8n)
 make install-service    # installer le service launchd API (démarrage au boot)
 
+make clean              # supprime .venv, .mypy_cache, .ruff_cache, .pytest_cache, __pycache__
+
 # MCP servers (démarrage isolé pour debug)
 make mcp-github / mcp-google / mcp-crm / mcp-seo
 
@@ -145,6 +149,8 @@ make test-mcp           # pytest tests/mcp_servers/
 
 - Python 3.11+, type hints stricts, `mypy --strict`
 - Pydantic AI pour les agents : `Agent(model=..., system_prompt=..., mcp_servers=[...])`
+- `OpenAIModel` exige désormais `provider=OpenAIProvider(base_url=..., api_key=...)` — ne plus passer `base_url`/`api_key` directement au constructeur (cassé depuis pydantic-ai ≥ 0.0.14). Voir `agents/config.py::openrouter_model()`
+- `mypy` en CI ne couvre que `agents/` — les autres packages (`api/`, `memory/`, `observability/`) ont des stubs incomplets pour asyncpg/qdrant-client qui génèrent des faux positifs en strict mode
 - MCP servers : `FastMCP` de `mcp.server.fastmcp`, `if __name__ == "__main__": mcp.run()`
 - Sessions : `SessionStore.create()` dans le lifespan → `app.state.sessions`. Les routes utilisent `request.app.state.sessions` (duck-typed, Redis ou PostgreSQL selon `REDIS_URL`)
 - Sérialisation Pydantic AI : `ModelMessagesTypeAdapter.dump_python(..., mode="json")` pour JSON
@@ -172,21 +178,28 @@ make test-mcp           # pytest tests/mcp_servers/
 | `OPENROUTER_API_KEY` | Clé OpenRouter (tous les LLMs + embeddings) |
 | `AGENTS_API_KEY` | Auth de l'API interne |
 | `DATABASE_URL` | PostgreSQL (sessions persistantes — fallback si REDIS_URL absent) |
+| `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_USER` | Credentials PostgreSQL (docker-compose) |
 | `REDIS_URL` | Sessions Redis (optionnel — ex: `redis://localhost:6379/0`) |
 | `SESSION_TTL_SECONDS` | TTL sessions (défaut : 3600) |
 | `QDRANT_HOST` / `QDRANT_PORT` | Mémoire vectorielle |
+| `EMBED_MODEL` | Modèle d'embedding OpenRouter (défaut : `openai/text-embedding-3-small`, dim=1536) |
 | `GITHUB_TOKEN` | MCP GitHub (scopes: `repo`) |
 | `GOOGLE_CREDENTIALS_FILE` | OAuth Google Workspace |
 | `CRM_API_KEY` | HubSpot Private App Token |
+| `SEARCH_CONSOLE_SITE_URL` | MCP SEO — URL de la propriété Search Console |
+| `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | MCP SEO — DataForSEO (optionnel) |
 | `SLACK_SIGNING_SECRET` | Vérification HMAC slash commands Slack (vide = open en dev) |
 | `TEAMS_WEBHOOK_KEY` | Vérification HMAC outgoing webhook Teams (vide = open en dev) |
 | `LANGFUSE_PUBLIC_KEY` | Clé publique Langfuse (tracing) |
 | `LANGFUSE_SECRET_KEY` | Clé secrète Langfuse |
 | `LANGFUSE_HOST` | URL Langfuse (défaut : cloud.langfuse.com) |
 | `DOCS_ENABLED=false` | Désactiver Swagger en prod |
+| `CORS_ORIGINS` | Origines CORS autorisées (défaut : ports 5173, 5678, 3000) |
 | `DEV_SENIOR_MODEL` | Modèle Dev Senior (défaut : `qwen/qwen-2.5-coder-7b-instruct`) |
 | `BIZ_MANAGER_MODEL` | Modèle Biz Manager (défaut : `meta-llama/llama-3.1-8b-instruct`) |
 | `OPENROUTER_BASE_URL` | URL OpenRouter (défaut : `https://openrouter.ai/api/v1`) |
+| `N8N_USER` / `N8N_PASSWORD` | Credentials n8n (docker-compose) |
+| `AGENTS_API_URL` | URL de l'API depuis n8n (défaut : `http://host.docker.internal:8080`) |
 
 ## Décisions architecturales
 

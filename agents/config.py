@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 load_dotenv()
 
@@ -13,8 +14,7 @@ def openrouter_model(model: str) -> OpenAIModel:
     """Retourne un modèle via OpenRouter (API OpenAI-compatible)."""
     return OpenAIModel(
         model,
-        base_url=OPENROUTER_BASE_URL,
-        api_key=OPENROUTER_API_KEY,
+        provider=OpenAIProvider(base_url=OPENROUTER_BASE_URL, api_key=OPENROUTER_API_KEY),
     )
 
 
