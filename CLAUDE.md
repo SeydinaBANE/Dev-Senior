@@ -69,8 +69,8 @@ frontend/
     hooks/       ← useChat.ts
 
 infra/
-  docker/        ← docker-compose (Qdrant + PostgreSQL + Redis + n8n)
-  deploy/        ← start/stop/healthcheck/launchd plist (API + eval cron) + init.sql
+  docker/        ← Dockerfile (multi-stage), docker-compose (Qdrant + PostgreSQL + Redis + n8n + agents-api)
+  deploy/        ← start/stop/healthcheck + launchd plist (eval cron) + init.sql
   ollama/        ← vestige pre-migration (ne plus utiliser, stack = OpenRouter)
 
 tests/
@@ -83,7 +83,7 @@ tests/
 docs/            ← guide_dev_senior.md, guide_biz_manager.md
 
 .github/
-  workflows/     ← ci.yml (lint + tests), deploy.yml (déploiement)
+  workflows/     ← ci.yml (lint + tests), docker.yml (build multi-arch → ghcr.io), deploy.yml (déploiement Mac mini)
 ```
 
 ## Commandes essentielles
@@ -92,8 +92,8 @@ docs/            ← guide_dev_senior.md, guide_biz_manager.md
 make setup              # venv + pip install + pre-commit install
 make docker-up          # démarrer Qdrant + PostgreSQL + Redis + n8n (Docker seulement)
 make docker-down        # arrêter les containers Docker
-make start              # script complet infra/deploy/start.sh (docker-up + API + attentes healthcheck)
-make stop               # script complet infra/deploy/stop.sh
+make start              # docker compose up -d (infra + agents-api)
+make stop               # docker compose down
 make healthcheck        # vérifier Qdrant, PostgreSQL, API, n8n
 
 make dev-senior         # lancer l'agent Dev Senior (terminal)
@@ -116,7 +116,7 @@ make test-watch         # pytest en mode watch (reruns automatiques)
 make lint               # ruff check
 make format             # ruff format + fix auto
 make typecheck          # mypy agents/ (strict, ignore-missing-imports)
-make deploy             # check + build frontend + redémarre le service launchd
+make deploy             # check + pull image ghcr.io + redémarre le conteneur Docker
 
 make eval-quality       # éval LLM-as-judge
 make eval-drift         # comparer aux métriques baseline
@@ -126,8 +126,6 @@ make install-eval-cron  # installer le cron d'évaluation quotidienne (launchd)
 make logs               # tail -f logs/api.log
 make logs-error         # tail -f logs/api-error.log
 make docker-logs        # logs Docker (Qdrant + PostgreSQL + n8n)
-make install-service    # installer le service launchd API (démarrage au boot)
-
 make clean              # supprime .venv, .mypy_cache, .ruff_cache, .pytest_cache, __pycache__
 
 # MCP servers (démarrage isolé pour debug)
@@ -216,4 +214,6 @@ make test-mcp           # pytest tests/mcp_servers/
 - **Eval cron** : launchd plist `com.agents.eval.plist`, 2h du matin, écrit un log JSON quotidien dans `logs/`
 - **Langfuse** : chaque appel agent crée un `trace` (input/output). Scores LLM-as-judge via `eval_quality.py`. Dashboard sur `cloud.langfuse.com`
 - **Upload / document_context** : extraction stateless côté serveur (`api/file_extractor.py`) — pypdf, python-docx, UTF-8/Latin-1, troncature 20k chars. Le texte extrait est renvoyé au client qui le passe dans `document_context` au moment du `send()`. `_build_prompt()` compose : contexte RAG + `[Document joint]` + message. Aucune dépendance au store de sessions
-- **Déploiement cloud** : `railway.toml` à la racine pour Railway (Nixpacks, healthcheck `/dev-senior/health`). `frontend/vercel.json` + `VITE_BASE_PATH=/` pour Vercel. Guide complet : `docs/deploy_railway_vercel.md`
+- **Image Docker multi-arch** : `infra/docker/Dockerfile` (multi-stage, node:20-alpine + python:3.11-slim). Build amd64+arm64 via `.github/workflows/docker.yml`, push vers `ghcr.io/<owner>/<repo>`. Build args: `VITE_BASE_PATH=/app/`, `VITE_API_KEY` (optionnel, secret GitHub).
+- **Déploiement cloud** : Dockerfile détecté automatiquement par Railway/Fly.io/Render. Le `railway.toml` avec Nixpacks reste disponible. Healthcheck : `/dev-senior/health`. `frontend/vercel.json` + `VITE_BASE_PATH=/` pour Vercel. Guide : `docs/deploy_railway_vercel.md`
+- **Déploiement self-hosted (Mac mini M4)** : `docker-compose.yml` contient le service `agents-api` + dépendances. `.env` fourni au runtime. `make deploy` = pull image + restart.

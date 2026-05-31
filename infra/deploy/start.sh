@@ -5,8 +5,6 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-VENV="$PROJECT_DIR/.venv"
-LOG_DIR="$PROJECT_DIR/logs"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -17,13 +15,16 @@ log()  { echo -e "${GREEN}[start]${NC} $1"; }
 warn() { echo -e "${YELLOW}[warn]${NC}  $1"; }
 fail() { echo -e "${RED}[fail]${NC}  $1"; exit 1; }
 
-mkdir -p "$LOG_DIR"
+log "Chargement de .env..."
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
+fi
 
-# ── 1. Docker (Qdrant + PostgreSQL + n8n) ─────────────────────────────────────
-log "Démarrage des containers Docker..."
+log "Démarrage de tous les services (infra + agents-api)..."
 docker compose -f "$PROJECT_DIR/infra/docker/docker-compose.yml" up -d
 
-# ── 2. Attendre Qdrant ────────────────────────────────────────────────────────
 log "Attente de Qdrant..."
 TRIES=0
 until curl -sf http://localhost:6333/healthz > /dev/null 2>&1; do
@@ -33,7 +34,6 @@ until curl -sf http://localhost:6333/healthz > /dev/null 2>&1; do
 done
 log "Qdrant prêt."
 
-# ── 3. Attendre PostgreSQL ────────────────────────────────────────────────────
 log "Attente de PostgreSQL..."
 TRIES=0
 until docker exec postgres pg_isready -U "${POSTGRES_USER:-agents}" -d "${POSTGRES_DB:-agents_db}" > /dev/null 2>&1; do
@@ -43,7 +43,6 @@ until docker exec postgres pg_isready -U "${POSTGRES_USER:-agents}" -d "${POSTGR
 done
 log "PostgreSQL prêt."
 
-# ── 4. Attendre Redis (optionnel — si le container existe) ───────────────────
 if docker ps --format '{{.Names}}' | grep -q "^redis$"; then
     log "Attente de Redis..."
     TRIES=0
@@ -55,23 +54,13 @@ if docker ps --format '{{.Names}}' | grep -q "^redis$"; then
     log "Redis prêt."
 fi
 
-# ── 5. API agents ─────────────────────────────────────────────────────────────
-log "Démarrage de l'API agents..."
-PLIST="$HOME/Library/LaunchAgents/com.agents.api.plist"
-if [[ -f "$PLIST" ]]; then
-    launchctl unload "$PLIST" 2>/dev/null || true
-    launchctl load "$PLIST"
-    log "API démarrée via launchd."
-else
-    warn "Plist launchd introuvable. Démarrage manuel..."
-    nohup "$VENV/bin/uvicorn" api.main:app \
-        --host 0.0.0.0 --port 8080 \
-        --log-level info \
-        > "$LOG_DIR/api.log" 2>&1 &
-    echo $! > "$LOG_DIR/api.pid"
-    log "API démarrée (PID: $(cat "$LOG_DIR/api.pid"))."
-fi
+log "Attente de l'API agents..."
+TRIES=0
+until curl -sf http://localhost:"${PORT:-8080}"/dev-senior/health > /dev/null 2>&1; do
+    sleep 3
+    TRIES=$((TRIES + 1))
+    [[ $TRIES -ge 15 ]] && fail "API agents ne répond pas après 45s"
+done
+log "API agents prête."
 
-# ── 6. Health check final ─────────────────────────────────────────────────────
-sleep 4
 bash "$PROJECT_DIR/infra/deploy/healthcheck.sh"

@@ -32,8 +32,8 @@ Utilisateurs
 ### 2.1 Créer le projet
 
 1. Railway → **New Project** → **Deploy from GitHub repo** → sélectionner `Dev-Senior`
-2. Railway détecte le `pyproject.toml` et utilise Nixpacks automatiquement
-3. Le `railway.toml` à la racine configure le start command et le healthcheck
+2. Railway détecte le `Dockerfile` dans `infra/docker/` et l'utilise automatiquement (prioritaire sur Nixpacks)
+3. Le `railway.toml` existe comme fallback si Dockerfile n'est pas détecté
 
 ### 2.2 Ajouter les services de données
 
@@ -217,10 +217,15 @@ Mettre à jour les headers `X-API-Key` dans les workflows n8n importés.
 
 ## 8. CI/CD GitHub Actions
 
-Le fichier `.github/workflows/deploy.yml` existant cible un self-hosted runner (Mac mini M4).
-Pour Railway/Vercel, le déploiement est déclenché automatiquement par push sur `main` — pas besoin de modifier le workflow de déploiement.
+Deux workflows GitHub Actions sont disponibles :
 
-Le workflow CI (`.github/workflows/ci.yml`) continue de tourner normalement.
+| Workflow | Déclencheur | Action |
+|---|---|---|
+| `ci.yml` | Tout push/PR | Lint + types + tests + scan secrets |
+| `docker.yml` | Push/PR/tag | Build image multi-arch (linux/amd64 + arm64) → push vers `ghcr.io` |
+| `deploy.yml` | Push sur `main` | Déploiement sur le self-hosted runner Mac mini M4 (pull image + restart) |
+
+Pour Railway/Vercel, le déploiement est déclenché automatiquement par push sur `main` via l'intégration GitHub de chaque plateforme. Le workflow `docker.yml` build et publie l'image sur ghcr.io — Railway/Vercel la récupèrent via le Dockerfile.
 
 ---
 

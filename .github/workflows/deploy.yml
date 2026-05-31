@@ -20,7 +20,7 @@ on:
 jobs:
   deploy:
     name: Déployer sur Mac mini M4
-    runs-on: self-hosted  # runner installé sur le Mac mini
+    runs-on: self-hosted
     environment: production
     concurrency:
       group: deploy-production
@@ -32,35 +32,52 @@ jobs:
       - name: Vérifier que les tests passent
         run: make check
 
-      - name: Mettre à jour les dépendances Python
-        run: pip install -e ".[dev]"
-
-      - name: Installer les dépendances frontend
-        run: make frontend-install
-
-      - name: Build frontend de production
+      - name: Lowercase image name
+        id: image
         env:
-          # VITE_API_KEY doit être défini dans les secrets GitHub du repo
-          # (Settings → Secrets → Actions → New repository secret)
-          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-        run: make frontend-build
+          REPO: ${{ github.repository }}
+        run: echo "name=ghcr.io/${REPO@L}" >> $GITHUB_OUTPUT
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest Docker image
+        env:
+          AGENTS_IMAGE: ${{ steps.image.outputs.name }}:latest
+        run: |
+          echo "Pulling ${AGENTS_IMAGE}..."
+          for i in $(seq 1 5); do
+            docker compose -f infra/docker/docker-compose.yml pull agents-api && break
+            echo "Attempt $i failed, waiting 30s for build to complete..."
+            sleep 30
+          done
 
       - name: Indexer la codebase (mémoire Dev Senior)
         run: make index-codebase
-        continue-on-error: true  # non bloquant si Qdrant est down au moment du deploy
+        continue-on-error: true
 
       - name: Redémarrer l'API agents
         run: |
-          launchctl unload ~/Library/LaunchAgents/com.agents.api.plist 2>/dev/null || true
-          launchctl load ~/Library/LaunchAgents/com.agents.api.plist
+          docker compose -f infra/docker/docker-compose.yml up -d agents-api
 
       - name: Health check post-déploiement
         run: |
-          sleep 8
-          bash infra/deploy/healthcheck.sh
+          echo "Waiting for agents-api to be healthy..."
+          for i in $(seq 1 10); do
+            sleep 5
+            docker compose -f infra/docker/docker-compose.yml exec -T agents-api \
+              curl -sf http://localhost:${PORT:-8080}/dev-senior/health > /dev/null 2>&1 \
+              && echo "agents-api is healthy" && exit 0
+          done
+          echo "Health check failed"
+          docker compose -f infra/docker/docker-compose.yml logs agents-api --tail=20
+          exit 1
 
       - name: Notifier en cas d'échec
         if: failure()
         run: |
-          echo "::error::Déploiement échoué — relancer manuellement avec : make deploy"
+          echo "::error::Déploiement échoué — logs ci-dessus"

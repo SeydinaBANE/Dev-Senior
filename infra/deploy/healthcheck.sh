@@ -33,10 +33,9 @@ echo ""
 ERRORS=0
 
 check "Qdrant"      "http://localhost:6333/healthz"  ""   || ERRORS=$((ERRORS+1))
-check "API agents"  "http://localhost:8080/health"   "ok" || ERRORS=$((ERRORS+1))
+check "API agents"  "http://localhost:${PORT:-8080}/dev-senior/health" "ok" || ERRORS=$((ERRORS+1))
 check "n8n"         "http://localhost:5678/healthz"  ""   || ERRORS=$((ERRORS+1))
 
-# ── PostgreSQL ────────────────────────────────────────────────────────────────
 echo ""
 echo "--- PostgreSQL ---"
 if docker exec postgres pg_isready -U "${POSTGRES_USER:-agents}" -d "${POSTGRES_DB:-agents_db}" > /dev/null 2>&1; then
@@ -46,7 +45,6 @@ else
     ERRORS=$((ERRORS+1))
 fi
 
-# ── Redis (optionnel) ─────────────────────────────────────────────────────────
 echo ""
 echo "--- Redis ---"
 if docker ps --format '{{.Names}}' | grep -q "^redis$"; then

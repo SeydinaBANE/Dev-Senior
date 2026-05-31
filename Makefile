@@ -56,11 +56,10 @@ help:
 	@echo "    make install-eval-cron  Installe le cron launchd (quotidien à 2h00)"
 	@echo ""
 	@echo "  Déploiement"
-	@echo "    make start              Démarre tout l'environnement"
-	@echo "    make stop               Arrête tous les services"
+	@echo "    make start              Démarre tout l'environnement (Docker)"
+	@echo "    make stop               Arrête tous les services (Docker)"
 	@echo "    make healthcheck        Vérifie l'état de tous les services"
-	@echo "    make install-service    Installe le service launchd (une fois)"
-	@echo "    make deploy             check + build frontend + redémarre l'API"
+	@echo "    make deploy             check + pull image + redémarre l'API"
 	@echo ""
 	@echo "  Divers"
 	@echo "    make clean              Supprime le venv et les caches"
@@ -219,10 +218,9 @@ logs:
 logs-error:
 	@tail -f logs/api-error.log
 
-deploy: check install frontend-build
-	@chmod +x infra/deploy/start_api.sh
-	launchctl unload "$(HOME)/Library/LaunchAgents/com.agents.api.plist" 2>/dev/null || true
-	launchctl load "$(HOME)/Library/LaunchAgents/com.agents.api.plist"
+deploy: check
+	docker compose -f infra/docker/docker-compose.yml pull agents-api
+	docker compose -f infra/docker/docker-compose.yml up -d agents-api
 	@sleep 8 && bash infra/deploy/healthcheck.sh
 
 # ── Divers ───────────────────────────────────────────────────────────────────

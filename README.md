@@ -13,6 +13,7 @@
 [![Slack](https://img.shields.io/badge/Slack-integration-4A154B?style=flat-square&logo=slack&logoColor=white)](https://api.slack.com)
 [![Teams](https://img.shields.io/badge/Teams-integration-6264A7?style=flat-square&logo=microsoftteams&logoColor=white)](https://learn.microsoft.com/fr-fr/microsoftteams/platform/)
 [![CI](https://img.shields.io/github/actions/workflow/status/SeydinaBANE/Dev-Senior/ci.yml?branch=main&style=flat-square&label=CI&logo=github)](https://github.com/SeydinaBANE/Dev-Senior/actions)
+[![Docker](https://img.shields.io/github/actions/workflow/status/SeydinaBANE/Dev-Senior/docker.yml?branch=main&style=flat-square&label=Docker&logo=docker)](https://github.com/SeydinaBANE/Dev-Senior/actions)
 [![License](https://img.shields.io/badge/licence-MIT-22C55E?style=flat-square)](LICENSE)
 
 Deux agents IA déployés en interne sur Mac mini M4 pour augmenter la productivité de l'équipe technique et des business managers.
@@ -26,9 +27,8 @@ Deux agents IA déployés en interne sur Mac mini M4 pour augmenter la productiv
 cp .env.example .env                # remplir OPENROUTER_API_KEY + POSTGRES_PASSWORD
 make setup                          # venv + deps + pre-commit
 
-# 2. Démarrer tout l'environnement
-make docker-up                      # Qdrant + PostgreSQL + Redis + n8n
-make api                            # FastAPI port 8080
+# 2. Démarrer tout l'environnement (Docker)
+make start                          # infra + API agents (port 8080)
 
 # 3. Ouvrir le frontend
 make frontend-install               # npm install (une seule fois)
@@ -110,7 +110,7 @@ make healthcheck
 | Extraction de fichiers | `pypdf` (PDF) + `python-docx` (DOCX) + texte/code natif — 20 000 chars max |
 | Chat d'équipe | Slack slash commands · Teams outgoing webhook |
 | Automatisation | n8n — 5 workflows prêts à l'emploi |
-| Infra | Docker Compose, GitHub Actions CI/CD, launchd (macOS) |
+| Infra | Docker Compose, GitHub Actions CI/CD, image multi-arch ghcr.io |
 
 ---
 
@@ -191,10 +191,10 @@ Un job launchd (`make install-eval-cron`) tourne chaque nuit à 2h :
 make setup              # venv + deps + pre-commit (première fois)
 make docker-up          # démarrer Qdrant + PostgreSQL + Redis + n8n
 make docker-down        # arrêter les containers
-make start              # démarre tout l'environnement
-make stop               # arrêt propre
+make start              # démarre tout l'environnement (Docker)
+make stop               # arrêt propre (Docker)
 make healthcheck        # vérifie Qdrant, PostgreSQL, API, n8n
-make install-service    # installe le service launchd (démarrage au boot)
+make deploy             # check + pull image Docker + redémarre l'API
 
 # Agents (terminal)
 make dev-senior         # Agent Dev Senior
@@ -288,13 +288,18 @@ make frontend-env
 ### Démarrage au boot (Mac mini M4)
 
 ```bash
-make install-service        # installe le service launchd (API)
-make install-eval-cron      # installe le cron d'évaluation quotidienne
+make start                  # Docker Compose gère le redémarrage automatique
+make install-eval-cron      # installe le cron d'évaluation quotidienne (launchd)
 ```
 
 ### Production (frontend servi par FastAPI)
 
 ```bash
+# Option A — Docker (recommandé)
+make start                  # tout l'environnement dans Docker
+make deploy                 # pull dernière image + redémarre
+
+# Option B — sans Docker (dev)
 make frontend-build         # build → frontend/dist/
 make serve-prod             # FastAPI sert /app + API sur :8080
 # → Interface disponible sur http://localhost:8080/app
@@ -305,7 +310,8 @@ make serve-prod             # FastAPI sert /app + API sur :8080
 ## CI/CD
 
 - **CI** (`.github/workflows/ci.yml`) : lint + types + tests + scan secrets — déclenché sur chaque push/PR
-- **Deploy** (`.github/workflows/deploy.yml`) : déploiement automatique sur self-hosted runner (Mac mini M4) après merge sur `main`
+- **Docker** (`.github/workflows/docker.yml`) : build multi-arch (linux/amd64 + arm64) → push vers ghcr.io — déclenché sur chaque push/PR/tag
+- **Deploy** (`.github/workflows/deploy.yml`) : déploiement automatique sur self-hosted runner (Mac mini M4) — pull image ghcr.io + redémarrage Docker
 
 ---
 
@@ -363,8 +369,8 @@ Dev-Senior/
 │   └── vite.config.ts      ← base pilotable via VITE_BASE_PATH (/app/ self-hosted, / Vercel)
 ├── workflows/n8n/          ← 5 workflows JSON (PR Review, SEO, Email, Lead, Contenu)
 ├── infra/
-│   ├── docker/             ← docker-compose (Qdrant + PostgreSQL + Redis + n8n)
-│   └── deploy/             ← start/stop/healthcheck + launchd (API + eval cron)
+│   ├── docker/             ← Dockerfile (multi-stage), docker-compose (Qdrant + PostgreSQL + Redis + n8n + agents-api)
+│   └── deploy/             ← start/stop/healthcheck + launchd (eval cron)
 ├── tests/
 │   ├── agents/             ← test_smoke.py (TestModel, sans appel réseau)
 │   ├── mcp_servers/        ← test_github.py, test_crm.py, test_seo.py, test_google_workspace.py
@@ -375,8 +381,8 @@ Dev-Senior/
 │   ├── guide_dev_senior.md
 │   ├── guide_biz_manager.md
 │   └── deploy_railway_vercel.md ← déploiement cloud Railway + Vercel
-├── .github/workflows/      ← ci.yml + deploy.yml
-├── railway.toml            ← config déploiement Railway (Nixpacks)
+├── .github/workflows/      ← ci.yml + docker.yml + deploy.yml
+├── railway.toml            ← config déploiement Railway (Nixpacks, Dockerfile prioritaire)
 ├── CLAUDE.md               ← instructions Claude Code
 ├── Makefile
 └── pyproject.toml
@@ -397,5 +403,5 @@ Dev-Senior/
 1. Créer une branche depuis `main`
 2. Développer et tester localement (`make check`)
 3. Le pre-commit vérifie automatiquement le code et bloque les secrets
-4. Ouvrir une PR — la CI tourne automatiquement
-5. Merge → déploiement automatique sur le Mac mini M4
+4. Ouvrir une PR — la CI + Docker build tournent automatiquement
+5. Merge → build image multi-arch → déploiement automatique sur le Mac mini M4
