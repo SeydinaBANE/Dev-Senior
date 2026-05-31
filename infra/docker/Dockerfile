@@ -2,7 +2,7 @@
 FROM node:20-alpine AS frontend
 WORKDIR /build
 COPY frontend/package*.json .
-RUN npm ci
+RUN npm install
 COPY frontend/ .
 ARG VITE_BASE_PATH=/app/
 ARG VITE_API_KEY=
