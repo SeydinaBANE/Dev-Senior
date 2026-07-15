@@ -17,16 +17,14 @@ Outils exposés :
 - serp_analysis     : analyse des résultats pour un mot-clé
 """
 
-import base64
 import os
 
 import httpx
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from mcp.server.fastmcp import FastMCP
+
+from mcp_servers.seo.adapters.dataforseo_client import DataForSeoClient
+from mcp_servers.seo.adapters.search_console_client import SearchConsoleClient
 
 mcp = FastMCP("seo")
 
@@ -38,25 +36,22 @@ DATAFORSEO_PASSWORD = os.getenv("DATAFORSEO_PASSWORD", "")
 
 SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 
-
-def _get_credentials() -> Credentials:
-    creds: Credentials | None = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, "w") as f:
-            f.write(creds.to_json())
-    return creds
+_search_console: SearchConsoleClient | None = None
+_dataforseo: DataForSeoClient | None = None
 
 
-def _dataforseo_headers() -> dict:
-    encoded = base64.b64encode(f"{DATAFORSEO_LOGIN}:{DATAFORSEO_PASSWORD}".encode()).decode()
-    return {"Authorization": f"Basic {encoded}", "Content-Type": "application/json"}
+def _search_console_client() -> SearchConsoleClient:
+    global _search_console
+    if _search_console is None:
+        _search_console = SearchConsoleClient(SCOPES, CREDENTIALS_FILE, TOKEN_FILE)
+    return _search_console
+
+
+def _dataforseo_client() -> DataForSeoClient:
+    global _dataforseo
+    if _dataforseo is None:
+        _dataforseo = DataForSeoClient(DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD)
+    return _dataforseo
 
 
 # ── Google Search Console ─────────────────────────────────────────────────────
@@ -80,18 +75,7 @@ def top_queries(
     if not SITE_URL:
         return "SEARCH_CONSOLE_SITE_URL manquant dans .env"
     try:
-        service = build("searchconsole", "v1", credentials=_get_credentials())
-        body = {
-            "startDate": start_date,
-            "endDate": end_date,
-            "dimensions": ["query"],
-            "dimensionFilterGroups": [
-                {"filters": [{"dimension": "country", "expression": country}]}
-            ],
-            "rowLimit": limit,
-        }
-        response = service.searchanalytics().query(siteUrl=SITE_URL, body=body).execute()
-        rows = response.get("rows", [])
+        rows = _search_console_client().top_queries(SITE_URL, start_date, end_date, limit, country)
         if not rows:
             return "Aucune donnée disponible pour cette période."
         lines = ["Requête | Clics | Impressions | CTR | Position"]
@@ -121,16 +105,7 @@ def page_performance(
     if not SITE_URL:
         return "SEARCH_CONSOLE_SITE_URL manquant dans .env"
     try:
-        service = build("searchconsole", "v1", credentials=_get_credentials())
-        body = {
-            "startDate": start_date,
-            "endDate": end_date,
-            "dimensions": ["query"],
-            "dimensionFilterGroups": [{"filters": [{"dimension": "page", "expression": url}]}],
-            "rowLimit": 10,
-        }
-        response = service.searchanalytics().query(siteUrl=SITE_URL, body=body).execute()
-        rows = response.get("rows", [])
+        rows = _search_console_client().page_performance(SITE_URL, url, start_date, end_date)
         if not rows:
             return f"Aucune donnée pour {url}."
         lines = [f"Performances de {url}", "Requête | Clics | Impressions | CTR | Position"]
@@ -159,17 +134,8 @@ def keyword_ideas(keyword: str, language: str = "fr", location: int = 2250) -> s
     if not DATAFORSEO_LOGIN:
         return "DATAFORSEO_LOGIN/PASSWORD manquants dans .env"
     try:
-        payload = [
-            {"keyword": keyword, "language_code": language, "location_code": location, "limit": 20}
-        ]
-        r = httpx.post(
-            "https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live",
-            json=payload,
-            headers=_dataforseo_headers(),
-            timeout=30,
-        )
-        r.raise_for_status()
-        tasks = r.json().get("tasks", [])
+        data = _dataforseo_client().keyword_ideas(keyword, language, location)
+        tasks = data.get("tasks", [])
         if not tasks or tasks[0]["status_code"] != 20000:
             return f"Erreur DataForSEO : {tasks[0].get('status_message', 'Inconnue')}"
         items = tasks[0]["result"][0].get("items", [])
@@ -197,15 +163,8 @@ def serp_analysis(keyword: str, language: str = "fr", location: int = 2250) -> s
     if not DATAFORSEO_LOGIN:
         return "DATAFORSEO_LOGIN/PASSWORD manquants dans .env"
     try:
-        payload = [{"keyword": keyword, "language_code": language, "location_code": location}]
-        r = httpx.post(
-            "https://api.dataforseo.com/v3/serp/google/organic/live/regular",
-            json=payload,
-            headers=_dataforseo_headers(),
-            timeout=30,
-        )
-        r.raise_for_status()
-        tasks = r.json().get("tasks", [])
+        data = _dataforseo_client().serp_analysis(keyword, language, location)
+        tasks = data.get("tasks", [])
         if not tasks or tasks[0]["status_code"] != 20000:
             return f"Erreur DataForSEO : {tasks[0].get('status_message', 'Inconnue')}"
         items = tasks[0]["result"][0].get("items", [])

@@ -11,14 +11,17 @@ from mcp_servers.google_workspace import server as gws
 
 @pytest.fixture(autouse=True)
 def mock_credentials():
-    with patch("mcp_servers.google_workspace.server._get_credentials", return_value=MagicMock()):
+    with patch(
+        "mcp_servers.google_workspace.adapters.workspace_client.get_credentials",
+        return_value=MagicMock(),
+    ):
         yield
 
 
 # ── Google Drive ──────────────────────────────────────────────────────────────
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_list_drive_files_returns_results(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -37,7 +40,7 @@ def test_list_drive_files_returns_results(mock_build: MagicMock) -> None:
     assert "abc123" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_list_drive_files_empty(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -46,7 +49,7 @@ def test_list_drive_files_empty(mock_build: MagicMock) -> None:
     assert "Aucun" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_read_drive_file_google_doc(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -59,7 +62,7 @@ def test_read_drive_file_google_doc(mock_build: MagicMock) -> None:
     assert "Contenu" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_read_drive_file_plain_text(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -72,7 +75,7 @@ def test_read_drive_file_plain_text(mock_build: MagicMock) -> None:
     assert "Notes brutes" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_create_drive_doc_returns_link(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -85,7 +88,7 @@ def test_create_drive_doc_returns_link(mock_build: MagicMock) -> None:
 # ── Gmail ─────────────────────────────────────────────────────────────────────
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_list_emails_returns_results(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -104,7 +107,7 @@ def test_list_emails_returns_results(mock_build: MagicMock) -> None:
     assert "Bonjour" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_list_emails_empty(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -113,7 +116,7 @@ def test_list_emails_empty(mock_build: MagicMock) -> None:
     assert "Aucun" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_send_email_confirms_recipient(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -124,7 +127,7 @@ def test_send_email_confirms_recipient(mock_build: MagicMock) -> None:
 # ── Google Calendar ───────────────────────────────────────────────────────────
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_list_events_returns_results(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -135,7 +138,7 @@ def test_list_events_returns_results(mock_build: MagicMock) -> None:
     assert "Réunion équipe" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_list_events_empty(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -144,7 +147,7 @@ def test_list_events_empty(mock_build: MagicMock) -> None:
     assert "Aucun" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_create_event_returns_link(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -161,7 +164,7 @@ def test_create_event_returns_link(mock_build: MagicMock) -> None:
     assert "calendar.google.com" in result
 
 
-@patch("mcp_servers.google_workspace.server.build")
+@patch("mcp_servers.google_workspace.adapters.workspace_client.build")
 def test_create_event_without_attendees(mock_build: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service

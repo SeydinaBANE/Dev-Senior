@@ -17,17 +17,13 @@ import os
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from mcp_servers.crm.adapters.hubspot_client import HubSpotClient
+
 mcp = FastMCP("crm")
 
 CRM_TYPE = os.getenv("CRM_TYPE", "hubspot")  # hubspot | notion | airtable | custom
 CRM_API_KEY = os.getenv("CRM_API_KEY", "")
 CRM_BASE_URL = os.getenv("CRM_BASE_URL", "")
-
-HUBSPOT_BASE = "https://api.hubapi.com"
-
-
-def _hubspot_headers() -> dict:
-    return {"Authorization": f"Bearer {CRM_API_KEY}", "Content-Type": "application/json"}
 
 
 # ── HubSpot ───────────────────────────────────────────────────────────────────
@@ -43,25 +39,7 @@ def search_contacts(query: str) -> str:
     if not CRM_API_KEY:
         return "CRM_API_KEY manquant dans .env"
     try:
-        payload = {
-            "filterGroups": [
-                {
-                    "filters": [
-                        {"propertyName": "email", "operator": "CONTAINS_TOKEN", "value": query}
-                    ]
-                }
-            ],
-            "properties": ["firstname", "lastname", "email", "company", "phone"],
-            "limit": 20,
-        }
-        r = httpx.post(
-            f"{HUBSPOT_BASE}/crm/v3/objects/contacts/search",
-            json=payload,
-            headers=_hubspot_headers(),
-            timeout=10,
-        )
-        r.raise_for_status()
-        contacts = r.json().get("results", [])
+        contacts = HubSpotClient(CRM_API_KEY).search_contacts(query)
         if not contacts:
             return f"Aucun contact trouvé pour '{query}'."
         lines = []
@@ -86,14 +64,7 @@ def get_contact(contact_id: str) -> str:
     if not CRM_API_KEY:
         return "CRM_API_KEY manquant dans .env"
     try:
-        props = "firstname,lastname,email,company,phone,lifecyclestage,notes_last_updated"
-        r = httpx.get(
-            f"{HUBSPOT_BASE}/crm/v3/objects/contacts/{contact_id}?properties={props}",
-            headers=_hubspot_headers(),
-            timeout=10,
-        )
-        r.raise_for_status()
-        p = r.json()["properties"]
+        p = HubSpotClient(CRM_API_KEY).get_contact(contact_id)
         return "\n".join(f"{k}: {v}" for k, v in p.items() if v)
     except httpx.HTTPError as e:
         return f"Erreur CRM : {e}"
@@ -112,22 +83,7 @@ def create_contact(email: str, firstname: str = "", lastname: str = "", company:
     if not CRM_API_KEY:
         return "CRM_API_KEY manquant dans .env"
     try:
-        payload = {
-            "properties": {
-                "email": email,
-                "firstname": firstname,
-                "lastname": lastname,
-                "company": company,
-            }
-        }
-        r = httpx.post(
-            f"{HUBSPOT_BASE}/crm/v3/objects/contacts",
-            json=payload,
-            headers=_hubspot_headers(),
-            timeout=10,
-        )
-        r.raise_for_status()
-        contact_id = r.json()["id"]
+        contact_id = HubSpotClient(CRM_API_KEY).create_contact(email, firstname, lastname, company)
         return f"Contact créé : ID {contact_id}"
     except httpx.HTTPError as e:
         return f"Erreur CRM : {e}"
@@ -143,22 +99,7 @@ def list_deals(stage: str = "") -> str:
     if not CRM_API_KEY:
         return "CRM_API_KEY manquant dans .env"
     try:
-        payload: dict = {
-            "properties": ["dealname", "amount", "dealstage", "closedate"],
-            "limit": 30,
-        }
-        if stage:
-            payload["filterGroups"] = [
-                {"filters": [{"propertyName": "dealstage", "operator": "EQ", "value": stage}]}
-            ]
-        r = httpx.post(
-            f"{HUBSPOT_BASE}/crm/v3/objects/deals/search",
-            json=payload,
-            headers=_hubspot_headers(),
-            timeout=10,
-        )
-        r.raise_for_status()
-        deals = r.json().get("results", [])
+        deals = HubSpotClient(CRM_API_KEY).list_deals(stage)
         if not deals:
             return "Aucune opportunité trouvée."
         lines = []
@@ -184,22 +125,7 @@ def create_note(contact_id: str, note: str) -> str:
     if not CRM_API_KEY:
         return "CRM_API_KEY manquant dans .env"
     try:
-        payload = {
-            "properties": {"hs_note_body": note, "hs_timestamp": "now"},
-            "associations": [
-                {
-                    "to": {"id": contact_id},
-                    "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}],
-                }
-            ],
-        }
-        r = httpx.post(
-            f"{HUBSPOT_BASE}/crm/v3/objects/notes",
-            json=payload,
-            headers=_hubspot_headers(),
-            timeout=10,
-        )
-        r.raise_for_status()
+        HubSpotClient(CRM_API_KEY).create_note(contact_id, note)
         return f"Note ajoutée sur le contact {contact_id}."
     except httpx.HTTPError as e:
         return f"Erreur CRM : {e}"

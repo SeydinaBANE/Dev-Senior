@@ -14,17 +14,12 @@ Auth : OAuth2 via credentials.json (à générer depuis Google Cloud Console).
 Le token est mis en cache dans token.json (gitignore).
 """
 
-import base64
 import os
-from datetime import UTC, datetime, timedelta
-from email.mime.text import MIMEText
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from mcp.server.fastmcp import FastMCP
+
+from mcp_servers.google_workspace.adapters.workspace_client import WorkspaceClient
 
 mcp = FastMCP("google-workspace")
 
@@ -37,24 +32,14 @@ SCOPES = [
 CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
 TOKEN_FILE = os.getenv("GOOGLE_TOKEN_FILE", "token.json")
 
+_client_instance: WorkspaceClient | None = None
 
-def _get_credentials() -> Credentials:
-    creds: Credentials | None = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            if not os.path.exists(CREDENTIALS_FILE):
-                raise RuntimeError(
-                    f"{CREDENTIALS_FILE} introuvable. Télécharge-le depuis Google Cloud Console."
-                )
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, "w") as f:
-            f.write(creds.to_json())
-    return creds
+
+def _client() -> WorkspaceClient:
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = WorkspaceClient(SCOPES, CREDENTIALS_FILE, TOKEN_FILE)
+    return _client_instance
 
 
 # ── Google Drive ──────────────────────────────────────────────────────────────
@@ -69,19 +54,7 @@ def list_drive_files(query: str = "", max_results: int = 20) -> str:
         max_results: Nombre max de résultats (défaut: 20).
     """
     try:
-        service = build("drive", "v3", credentials=_get_credentials())
-        q = f"name contains '{query}' and trashed=false" if query else "trashed=false"
-        results = (
-            service.files()
-            .list(
-                q=q,
-                pageSize=max_results,
-                fields="files(id, name, mimeType, modifiedTime)",
-                orderBy="modifiedTime desc",
-            )
-            .execute()
-        )
-        files = results.get("files", [])
+        files = _client().list_drive_files(query, max_results)
         if not files:
             return "Aucun fichier trouvé."
         lines = [
@@ -100,16 +73,7 @@ def read_drive_file(file_id: str) -> str:
         file_id: ID du fichier (visible avec list_drive_files).
     """
     try:
-        service = build("drive", "v3", credentials=_get_credentials())
-        meta = service.files().get(fileId=file_id, fields="mimeType,name").execute()
-        mime = meta["mimeType"]
-
-        if "google-apps.document" in mime:
-            content = service.files().export(fileId=file_id, mimeType="text/plain").execute()
-            return content.decode("utf-8")
-        else:
-            content = service.files().get_media(fileId=file_id).execute()
-            return content.decode("utf-8", errors="replace")
+        return _client().read_drive_file(file_id)
     except HttpError as e:
         return f"Erreur Drive : {e}"
 
@@ -123,13 +87,7 @@ def create_drive_doc(title: str, content: str) -> str:
         content: Contenu texte du document.
     """
     try:
-        docs_service = build("docs", "v1", credentials=_get_credentials())
-        doc = docs_service.documents().create(body={"title": title}).execute()
-        doc_id = doc["documentId"]
-        docs_service.documents().batchUpdate(
-            documentId=doc_id,
-            body={"requests": [{"insertText": {"location": {"index": 1}, "text": content}}]},
-        ).execute()
+        doc_id = _client().create_drive_doc(title, content)
         return f"Document créé : https://docs.google.com/document/d/{doc_id}"
     except HttpError as e:
         return f"Erreur Docs : {e}"
@@ -147,30 +105,14 @@ def list_emails(query: str = "is:unread", max_results: int = 10) -> str:
         max_results: Nombre max d'emails retournés (défaut: 10).
     """
     try:
-        service = build("gmail", "v1", credentials=_get_credentials())
-        results = (
-            service.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
-        )
-        messages = results.get("messages", [])
-        if not messages:
+        details = _client().list_emails(query, max_results)
+        if not details:
             return "Aucun email trouvé."
-
         lines = []
-        for msg in messages:
-            detail = (
-                service.users()
-                .messages()
-                .get(
-                    userId="me",
-                    id=msg["id"],
-                    format="metadata",
-                    metadataHeaders=["From", "Subject", "Date"],
-                )
-                .execute()
-            )
+        for detail in details:
             headers = {h["name"]: h["value"] for h in detail["payload"]["headers"]}
             lines.append(
-                f"[{msg['id']}] {headers.get('Date', '')[:16]} "
+                f"[{detail['id']}] {headers.get('Date', '')[:16]} "
                 f"De: {headers.get('From', '')} — {headers.get('Subject', '')}"
             )
         return "\n".join(lines)
@@ -188,12 +130,7 @@ def send_email(to: str, subject: str, body: str) -> str:
         body:    Corps du message (texte brut).
     """
     try:
-        service = build("gmail", "v1", credentials=_get_credentials())
-        message = MIMEText(body)
-        message["to"] = to
-        message["subject"] = subject
-        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        service.users().messages().send(userId="me", body={"raw": raw}).execute()
+        _client().send_email(to, subject, body)
         return f"Email envoyé à {to}."
     except HttpError as e:
         return f"Erreur Gmail : {e}"
@@ -211,22 +148,7 @@ def list_events(days_ahead: int = 7, max_results: int = 20) -> str:
         max_results: Nombre max d'événements (défaut: 20).
     """
     try:
-        service = build("calendar", "v3", credentials=_get_credentials())
-        now = datetime.now(UTC)
-        end = now + timedelta(days=days_ahead)
-        events_result = (
-            service.events()
-            .list(
-                calendarId="primary",
-                timeMin=now.isoformat(),
-                timeMax=end.isoformat(),
-                maxResults=max_results,
-                singleEvents=True,
-                orderBy="startTime",
-            )
-            .execute()
-        )
-        events = events_result.get("items", [])
+        events = _client().list_events(days_ahead, max_results)
         if not events:
             return f"Aucun événement dans les {days_ahead} prochains jours."
         lines = []
@@ -256,16 +178,7 @@ def create_event(
         attendees:   Emails des participants, séparés par des virgules.
     """
     try:
-        service = build("calendar", "v3", credentials=_get_credentials())
-        event: dict = {
-            "summary": title,
-            "description": description,
-            "start": {"dateTime": start, "timeZone": "Europe/Paris"},
-            "end": {"dateTime": end, "timeZone": "Europe/Paris"},
-        }
-        if attendees:
-            event["attendees"] = [{"email": e.strip()} for e in attendees.split(",")]
-        created = service.events().insert(calendarId="primary", body=event).execute()
+        created = _client().create_event(title, start, end, description, attendees)
         return f"Événement créé : {created['htmlLink']}"
     except HttpError as e:
         return f"Erreur Calendar : {e}"

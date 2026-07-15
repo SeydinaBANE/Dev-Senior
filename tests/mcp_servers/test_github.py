@@ -11,9 +11,9 @@ from mcp_servers.github import server as gh
 
 @pytest.fixture(autouse=True)
 def reset_client():
-    gh._gh = None
+    gh._client_instance = None
     yield
-    gh._gh = None
+    gh._client_instance = None
 
 
 def _mock_github(mock_cls: MagicMock, repo_data: dict | None = None) -> MagicMock:
@@ -25,7 +25,7 @@ def _mock_github(mock_cls: MagicMock, repo_data: dict | None = None) -> MagicMoc
 
 
 @patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"})
-@patch("mcp_servers.github.server.Github")
+@patch("mcp_servers.github.adapters.github_client.Github")
 def test_list_prs_returns_lines(mock_gh_cls: MagicMock) -> None:
     mock_repo = _mock_github(mock_gh_cls)
     pr = MagicMock()
@@ -41,7 +41,7 @@ def test_list_prs_returns_lines(mock_gh_cls: MagicMock) -> None:
 
 
 @patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"})
-@patch("mcp_servers.github.server.Github")
+@patch("mcp_servers.github.adapters.github_client.Github")
 def test_list_prs_empty(mock_gh_cls: MagicMock) -> None:
     mock_repo = _mock_github(mock_gh_cls)
     mock_repo.get_pulls.return_value = []
@@ -51,13 +51,13 @@ def test_list_prs_empty(mock_gh_cls: MagicMock) -> None:
 
 def test_list_prs_no_token() -> None:
     with patch.dict("os.environ", {}, clear=True):
-        with patch("mcp_servers.github.server._gh", None):
+        with patch("mcp_servers.github.server._client_instance", None):
             result = gh.list_prs("owner/repo")
     assert "GITHUB_TOKEN" in result
 
 
 @patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"})
-@patch("mcp_servers.github.server.Github")
+@patch("mcp_servers.github.adapters.github_client.Github")
 def test_create_issue(mock_gh_cls: MagicMock) -> None:
     mock_repo = _mock_github(mock_gh_cls)
     issue = MagicMock()

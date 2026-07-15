@@ -10,8 +10,8 @@ from mcp_servers.seo import server as seo
 
 
 @patch("mcp_servers.seo.server.SITE_URL", "https://example.com")
-@patch("mcp_servers.seo.server._get_credentials")
-@patch("mcp_servers.seo.server.build")
+@patch("mcp_servers.seo.adapters.search_console_client.get_credentials")
+@patch("mcp_servers.seo.adapters.search_console_client.build")
 def test_top_queries_returns_results(mock_build: MagicMock, mock_creds: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -26,8 +26,8 @@ def test_top_queries_returns_results(mock_build: MagicMock, mock_creds: MagicMoc
 
 
 @patch("mcp_servers.seo.server.SITE_URL", "https://example.com")
-@patch("mcp_servers.seo.server._get_credentials")
-@patch("mcp_servers.seo.server.build")
+@patch("mcp_servers.seo.adapters.search_console_client.get_credentials")
+@patch("mcp_servers.seo.adapters.search_console_client.build")
 def test_top_queries_empty(mock_build: MagicMock, mock_creds: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -46,8 +46,8 @@ def test_top_queries_no_site_url() -> None:
 
 
 @patch("mcp_servers.seo.server.SITE_URL", "https://example.com")
-@patch("mcp_servers.seo.server._get_credentials")
-@patch("mcp_servers.seo.server.build")
+@patch("mcp_servers.seo.adapters.search_console_client.get_credentials")
+@patch("mcp_servers.seo.adapters.search_console_client.build")
 def test_page_performance_returns_results(mock_build: MagicMock, mock_creds: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service
@@ -68,8 +68,8 @@ def test_page_performance_returns_results(mock_build: MagicMock, mock_creds: Mag
 
 
 @patch("mcp_servers.seo.server.SITE_URL", "https://example.com")
-@patch("mcp_servers.seo.server._get_credentials")
-@patch("mcp_servers.seo.server.build")
+@patch("mcp_servers.seo.adapters.search_console_client.get_credentials")
+@patch("mcp_servers.seo.adapters.search_console_client.build")
 def test_page_performance_empty(mock_build: MagicMock, mock_creds: MagicMock) -> None:
     mock_service = MagicMock()
     mock_build.return_value = mock_service

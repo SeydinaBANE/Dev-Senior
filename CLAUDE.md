@@ -27,10 +27,11 @@ agents/
   config.py      ← openrouter_model(), dev_senior_model(), biz_manager_model()
 
 mcp_servers/
-  github/           ← list_prs, get_pr_diff, read_file, search_code, create_issue…
-  google_workspace/ ← Gmail, Calendar, Drive
-  crm/              ← HubSpot (contacts, deals, notes)
-  seo/              ← Search Console + DataForSEO
+  common/           ← google_auth.py : get_credentials() OAuth2 partagé (seo + google_workspace)
+  github/           ← server.py (wrappers @mcp.tool() fins) + adapters/github_client.py (GithubClient, PyGithub)
+  google_workspace/ ← server.py + adapters/workspace_client.py (WorkspaceClient : Drive, Docs, Gmail, Calendar)
+  crm/              ← server.py + adapters/hubspot_client.py (HubSpotClient, HubSpot REST)
+  seo/              ← server.py + adapters/search_console_client.py (Search Console) + dataforseo_client.py (DataForSEO)
 
 api/
   auth.py           ← require_api_key (open en dev si AGENTS_API_KEY absent)
@@ -79,11 +80,15 @@ infra/
   ollama/        ← vestige pre-migration (ne plus utiliser, stack = OpenRouter)
 
 tests/
-  agents/        ← test_smoke.py (TestModel Pydantic AI, pas d'appel réseau)
-  mcp_servers/   ← test_github.py, test_crm.py, test_seo.py, test_google_workspace.py
-  memory/        ← test_shared.py
-  observability/ ← test_evals.py
-  api/           ← test_sessions.py, test_slack.py, test_teams.py, test_streaming.py, test_upload.py
+  conftest.py    ← pré-import des modules memory/* stubés ailleurs (évite la pollution sys.modules)
+  agents/        ← test_smoke.py (TestModel Pydantic AI, pas d'appel réseau), test_registry.py (AgentRegistry)
+  mcp_servers/   ← test_github.py, test_github_client.py, test_crm.py, test_hubspot_client.py,
+                   test_seo.py, test_search_console_client.py, test_dataforseo_client.py,
+                   test_google_workspace.py, test_workspace_client.py, test_google_auth.py
+  memory/        ← test_shared.py, test_qdrant_store.py, test_retriever.py, test_context.py, test_indexer.py
+  observability/ ← test_cron_eval.py
+  api/           ← test_sessions.py, test_slack.py, test_teams.py, test_streaming.py, test_upload.py,
+                   test_biz_manager_task.py
 
 docs/            ← guide_dev_senior.md, guide_biz_manager.md
 
@@ -212,6 +217,7 @@ make test-mcp           # pytest tests/mcp_servers/
 - **VectorStore (ABC)** — architecture hexagonale : `memory/ports.py::VectorStore` isole la logique métier (seuils de score, filtres, formatage de contexte) de `qdrant_client`, confiné à l'unique adapter `memory/adapters/qdrant_store.py::QdrantVectorStore`. Chaque collection a un repository dédié construit par-dessus le port : `CodebaseRepository` (`memory/dev_senior/retriever.py`, réutilisé par `indexer.py`), `SharedMemoryRepository` (`memory/shared/memory.py`), `BizContextRepository` (`memory/biz_manager/context.py`). Les wrappers `retrieve_context`/`save_shared`/`retrieve_shared`/`save_note`/`save_interaction` gardent leurs signatures historiques. `PayloadFilter = dict[str, str]` (égalité ANDée) couvre tous les filtres actuels. `BizContextRepository.retrieve()` retourne `None` (pas `""`) si la collection est vide — comportement historique : ça court-circuite le fallback mémoire partagée dans `retrieve_context()`, contrairement à `CodebaseRepository` qui vérifie toujours le fallback partagé
 - **SessionStore (ABC)** : factory `SessionStore.create()` sélectionne Redis si `REDIS_URL` est défini, sinon PostgreSQL. Zéro changement côté routes. `RedisSessionStore` utilise des hashes Redis avec `EXPIRE` natif ; `PostgresSessionStore` wrape asyncpg avec cleanup TTL manuel. `set_history` utilise un UPSERT (`INSERT ... ON CONFLICT DO UPDATE`) pour créer les sessions externes (Slack/Teams) au premier appel sans passer par `new_session`
 - **AgentPort (Protocol) + AgentRegistry** — architecture hexagonale : `agents/ports.py::AgentPort` est un `Protocol` structurellement satisfait par `pydantic_ai.Agent` (un seul backend, pas de classe wrapper). `agents/adapters/{dev_senior,biz_manager}_agent.py::build_agent()` construisent l'agent réel (model + system prompt + MCP servers). `agents/registry.py::AgentRegistry` remplace les anciens singletons module-level `dev_agent`/`biz_agent` : construit dans le lifespan (`AgentRegistry.create()`) et attaché à `app.state.agents` (même pattern que `app.state.sessions`). Les routes/slack/teams consomment `request.app.state.agents.dev_senior` / `.biz_manager` / `.get(name)` — plus aucun import direct du singleton dans `api/`. `agents/dev_senior/agent.py` et `agents/biz_manager/agent.py` restent des singletons de compatibilité fins (`agent = build_agent()`), utilisés uniquement par les CLI `__main__.py`
+- **MCP servers (`mcp_servers/*`) — architecture hexagonale** : chaque `server.py` (github/crm/seo/google_workspace) est réduit à des wrappers `@mcp.tool()` fins — guard-clauses (`GITHUB_TOKEN`, `CRM_API_KEY`, `SITE_URL`, `DATAFORSEO_LOGIN`) et formatage de réponse pour le LLM restent dans `server.py` ; tout appel SDK/HTTP externe est isolé dans `adapters/*_client.py` (`GithubClient`, `HubSpotClient`, `SearchConsoleClient`, `DataForSeoClient`, `WorkspaceClient`). Pas de `Protocol`/ABC ici (un seul backend par intégration, pas de besoin de swap) — juste des classes concrètes, contrairement à `VectorStore`/`AgentPort`. `mcp_servers/common/google_auth.py::get_credentials()` unifie les OAuth Google de `seo` et `google_workspace` (credentials récupérées fraîches à CHAQUE appel d'outil, jamais mises en cache sur l'adapter — sinon le token expiré n'est jamais rafraîchi). `crm/server.py` garde `CRM_TYPE`/`CRM_BASE_URL` (env vars lues mais jamais utilisées — seul HubSpot est implémenté malgré le docstring qui promet Notion/Airtable) : vaporware préexistant, non corrigé
 - **MCPServerStdio** : MCP servers démarrés une fois au lancement via `AgentRegistry.run_mcp_servers()` (nesting dev_senior puis biz_manager, identique à l'ancien double `async with` imbriqué dans `api/main.py`)
 - **React + Vite** : frontend découplé, dev proxy vers l'API sur :8080, build statique pour la prod. `VITE_BASE_PATH` contrôle la base URL : `/app/` en self-hosted (FastAPI sert le SPA via `StaticFiles`), `/` sur Vercel. `VITE_API_URL` permet de pointer sur une API distante (Railway). `frontend/vercel.json` contient la règle de rewrite SPA
 - **Streaming SSE** : `POST /chat/stream` utilise `agent.run_stream(delta=True)` et retourne `StreamingResponse(media_type="text/event-stream")`. Format : `event: session` → deltas JSON-encodés → `data: [DONE]` (ou `event: error`). Le JSON-encoding des deltas évite les problèmes de caractères spéciaux dans le protocole SSE. Session et `save_interaction()` sauvegardés après le stream, pas pendant. `X-Accel-Buffering: no` désactive le buffering nginx. Les endpoints `/chat` (JSON) coexistent comme fallback pour n8n

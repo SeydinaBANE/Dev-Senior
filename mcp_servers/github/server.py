@@ -11,23 +11,20 @@ Outils exposés :
 - recent_commits  : historique des commits
 """
 
-import os
-
-from github import Github, GithubException
+from github import GithubException
 from mcp.server.fastmcp import FastMCP
 
+from mcp_servers.github.adapters.github_client import GithubClient
+
 mcp = FastMCP("github")
-_gh: Github | None = None
+_client_instance: GithubClient | None = None
 
 
-def _client() -> Github:
-    global _gh
-    if _gh is None:
-        token = os.getenv("GITHUB_TOKEN")
-        if not token:
-            raise RuntimeError("GITHUB_TOKEN manquant dans .env")
-        _gh = Github(token)
-    return _gh
+def _client() -> GithubClient:
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = GithubClient()
+    return _client_instance
 
 
 # ── Outils ───────────────────────────────────────────────────────────────────
@@ -42,7 +39,7 @@ def list_prs(repo: str, state: str = "open") -> str:
         state: 'open', 'closed' ou 'all'.
     """
     try:
-        pulls = _client().get_repo(repo).get_pulls(state=state)
+        pulls = _client().list_pulls(repo, state)
         lines = [f"#{pr.number} [{pr.state}] {pr.title} — {pr.user.login}" for pr in pulls]
         return "\n".join(lines) if lines else "Aucune PR trouvée."
     except RuntimeError as e:
@@ -60,7 +57,7 @@ def get_pr_diff(repo: str, pr_number: int) -> str:
         pr_number: Numéro de la PR.
     """
     try:
-        pr = _client().get_repo(repo).get_pull(pr_number)
+        pr = _client().get_pull(repo, pr_number)
         files = pr.get_files()
         parts = [f"PR #{pr_number} : {pr.title}\n"]
         for f in files:
@@ -84,7 +81,7 @@ def read_file(repo: str, path: str, ref: str = "main") -> str:
         ref:  Branche ou commit (défaut: 'main').
     """
     try:
-        content = _client().get_repo(repo).get_contents(path, ref=ref)
+        content = _client().read_file(repo, path, ref)
         if isinstance(content, list):
             return "\n".join(f.path for f in content)
         return content.decoded_content.decode("utf-8")
@@ -103,7 +100,7 @@ def search_code(repo: str, query: str) -> str:
         query: Termes de recherche (ex: 'def authenticate').
     """
     try:
-        results = _client().search_code(f"{query} repo:{repo}")
+        results = _client().search_code(repo, query)
         lines = [f"{r.path}:{r.name}" for r in results]
         return "\n".join(lines[:20]) if lines else "Aucun résultat."
     except RuntimeError as e:
@@ -125,7 +122,7 @@ def list_issues(repo: str, state: str = "open", labels: str = "") -> str:
         kwargs: dict = {"state": state}
         if labels:
             kwargs["labels"] = [lbl.strip() for lbl in labels.split(",")]
-        issues = _client().get_repo(repo).get_issues(**kwargs)
+        issues = _client().list_issues(repo, **kwargs)
         lines = [f"#{i.number} {i.title} — {i.user.login}" for i in issues if not i.pull_request]
         return "\n".join(lines) if lines else "Aucune issue trouvée."
     except RuntimeError as e:
@@ -148,7 +145,7 @@ def create_issue(repo: str, title: str, body: str, labels: str = "") -> str:
         kwargs: dict = {"title": title, "body": body}
         if labels:
             kwargs["labels"] = [lbl.strip() for lbl in labels.split(",")]
-        issue = _client().get_repo(repo).create_issue(**kwargs)
+        issue = _client().create_issue(repo, **kwargs)
         return f"Issue créée : #{issue.number} — {issue.html_url}"
     except RuntimeError as e:
         return str(e)
@@ -166,7 +163,7 @@ def recent_commits(repo: str, branch: str = "main", limit: int = 10) -> str:
         limit:  Nombre de commits à retourner (max 50).
     """
     try:
-        commits = _client().get_repo(repo).get_commits(sha=branch)
+        commits = _client().recent_commits(repo, branch)
         lines = [
             f"{c.sha[:7]} {c.commit.message.splitlines()[0]} — {c.commit.author.name}"
             for c in list(commits)[: min(limit, 50)]

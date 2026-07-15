@@ -104,6 +104,22 @@ Three collections: `codebase` (RAG, threshold 0.70, top_k=5), `biz_context` (thr
 
 `observability/logfire_config.py` is a deprecated compat shim — import from `langfuse_config` directly.
 
+## MCP servers (github, crm, seo, google_workspace)
+
+Each `mcp_servers/<name>/server.py` is a thin `@mcp.tool()` protocol layer — guard-clauses (`GITHUB_TOKEN`, `CRM_API_KEY`, `SITE_URL`, `DATAFORSEO_LOGIN`) and response formatting for the LLM stay in `server.py`; every external SDK/HTTP call lives in `mcp_servers/<name>/adapters/*_client.py`:
+- `github/adapters/github_client.py::GithubClient` — wraps PyGithub, one method per tool, returns the raw PyGithub objects (`PullRequest`, `Issue`, `Commit`) — `server.py` still does the string formatting.
+- `crm/adapters/hubspot_client.py::HubSpotClient` — wraps HubSpot REST calls (`httpx.post`/`.get` as bare functions, not an `httpx.Client()` instance — important, see below).
+- `seo/adapters/search_console_client.py::SearchConsoleClient` (Google Search Console) and `seo/adapters/dataforseo_client.py::DataForSeoClient` (DataForSEO, Basic auth) — two backends, two adapters.
+- `google_workspace/adapters/workspace_client.py::WorkspaceClient` — Drive/Docs/Gmail/Calendar in one class (mirrors today's single-file grouping).
+
+No `Protocol`/ABC port here (unlike `VectorStore`/`AgentPort`) — each adapter has exactly one consumer and no swap is anticipated, so a port would add nothing.
+
+`mcp_servers/common/google_auth.py::get_credentials(scopes, credentials_file, token_file)` unifies the two near-duplicate `_get_credentials()` implementations that used to live in `seo/server.py` and `google_workspace/server.py` (they differed only in `SCOPES` and one missing-file guard — now both get the more defensive check). **Critical invariant**: credentials are fetched fresh on every tool call, never cached on the adapter instance — a long-lived process must re-validate/refresh the token on each invocation, matching the pre-refactor behavior exactly.
+
+`crm/server.py` still reads `CRM_TYPE`/`CRM_BASE_URL` from env but never uses them — only HubSpot is implemented despite the docstring claiming Notion/Airtable/custom are pluggable. Pre-existing vaporware, not fixed as part of this refactor.
+
+Test patch-target rule: every test in `tests/mcp_servers/` patches names as bound in the module that actually calls them at runtime — e.g. `@patch("mcp_servers.github.adapters.github_client.Github")`, `@patch("mcp_servers.seo.adapters.search_console_client.build")`, `@patch("mcp_servers.google_workspace.adapters.workspace_client.get_credentials")`. The one exception is CRM: `HubSpotClient` calls bare `httpx.post(...)`/`httpx.get(...)` (not an instantiated client), so `@patch("httpx.post")` works globally regardless of which module makes the call — that's why `test_crm.py`'s patch targets didn't need to change when the HTTP calls moved into `hubspot_client.py`. If an adapter ever switches to `httpx.Client()`, that global-patch trick breaks and tests must patch the client instance instead.
+
 ## Docker image
 
 Multi-stage Dockerfile at `infra/docker/Dockerfile`:

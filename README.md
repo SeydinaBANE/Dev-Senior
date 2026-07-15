@@ -327,10 +327,11 @@ Dev-Senior/
 │   ├── biz_manager/        ← agent.py (singleton de compat CLI), prompts.py, __main__.py
 │   └── config.py           ← OpenRouter model factory
 ├── mcp_servers/
-│   ├── github/             ← list_prs, get_pr_diff, read_file, create_issue…
-│   ├── google_workspace/   ← Drive, Gmail, Calendar
-│   ├── crm/                ← HubSpot (contacts, deals, notes)
-│   └── seo/                ← Search Console + DataForSEO
+│   ├── common/              ← google_auth.py : get_credentials() OAuth2 partagé
+│   ├── github/              ← server.py (wrappers fins) + adapters/github_client.py
+│   ├── google_workspace/    ← server.py + adapters/workspace_client.py (Drive, Docs, Gmail, Calendar)
+│   ├── crm/                 ← server.py + adapters/hubspot_client.py
+│   └── seo/                 ← server.py + adapters/search_console_client.py + dataforseo_client.py
 ├── api/
 │   ├── auth.py             ← X-API-Key (open en dev si clé absente)
 │   ├── db.py               ← pool asyncpg + get_pool()
@@ -379,7 +380,9 @@ Dev-Senior/
 ├── tests/
 │   ├── conftest.py         ← pré-import des modules memory/* stubés ailleurs (évite la pollution sys.modules)
 │   ├── agents/             ← test_smoke.py (TestModel, sans appel réseau), test_registry.py (AgentRegistry)
-│   ├── mcp_servers/        ← test_github.py, test_crm.py, test_seo.py, test_google_workspace.py
+│   ├── mcp_servers/        ← test_github.py, test_github_client.py, test_crm.py, test_hubspot_client.py,
+│   │                         test_seo.py, test_search_console_client.py, test_dataforseo_client.py,
+│   │                         test_google_workspace.py, test_workspace_client.py, test_google_auth.py
 │   ├── memory/             ← test_shared.py, test_qdrant_store.py, test_retriever.py, test_context.py, test_indexer.py
 │   ├── observability/      ← test_cron_eval.py
 │   └── api/                ← test_sessions.py, test_slack.py, test_teams.py, test_streaming.py, test_upload.py, test_biz_manager_task.py
