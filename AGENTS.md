@@ -100,7 +100,7 @@ Three collections: `codebase` (RAG, threshold 0.70, top_k=5), `biz_context` (thr
 
 `memory/vector_store/` is gitignored (local Qdrant data). Index with `make index-codebase` (incremental) or `make index-codebase-force` (full reindex).
 
-`qdrant-client>=1.9.0` has no upper bound in `pyproject.toml`; newer releases (1.1x+) removed `QdrantClient.search()` in favor of `query_points()`. Existing code (old and new) still calls `.search()` with `# type: ignore[attr-defined]` — a pre-existing latent break, not yet fixed, worth checking before relying on real Qdrant search in prod.
+`qdrant-client` is pinned `>=1.10.0` (the version `query_points()` was introduced) — `QdrantClient.search()` was removed starting 1.16.0, so `memory/adapters/qdrant_store.py::QdrantVectorStore.search()` uses `query_points()` (`response.points`, not a bare list) instead. That's the only place that matters; no other file should call `.search()` directly.
 
 `observability/logfire_config.py` is a deprecated compat shim — import from `langfuse_config` directly.
 

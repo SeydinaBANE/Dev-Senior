@@ -5,16 +5,14 @@ Client Qdrant injecté en fake, aucun appel réseau.
 
 from unittest.mock import MagicMock
 
+from qdrant_client import QdrantClient
+
 from memory.adapters.qdrant_store import QdrantVectorStore
 from memory.ports import VectorHit, VectorPoint
 
 
 def _make_client() -> MagicMock:
-    # Pas de spec=QdrantClient : client.search() est appelé pour préserver le
-    # comportement historique (voir memory/shared/memory.py), alors que les
-    # versions récentes de qdrant-client exposent query_points() à la place —
-    # bug préexistant, hors périmètre de cette migration.
-    return MagicMock()
+    return MagicMock(spec=QdrantClient)
 
 
 def test_ensure_collection_delegates_to_memory_store() -> None:
@@ -65,7 +63,7 @@ def test_upsert_builds_point_structs() -> None:
 def test_search_translates_hits_and_filter() -> None:
     client = _make_client()
     hit = MagicMock(id="1", payload={"text": "match"}, score=0.9)
-    client.search.return_value = [hit]
+    client.query_points.return_value = MagicMock(points=[hit])
     store = QdrantVectorStore(client=client)
 
     results = store.search(
@@ -77,7 +75,8 @@ def test_search_translates_hits_and_filter() -> None:
     )
 
     assert results == [VectorHit(id="1", payload={"text": "match"}, score=0.9)]
-    kwargs = client.search.call_args.kwargs
+    kwargs = client.query_points.call_args.kwargs
+    assert kwargs["query"] == [0.1] * 1536
     assert kwargs["score_threshold"] == 0.7
     assert kwargs["query_filter"] is not None
     assert kwargs["with_payload"] is True
@@ -85,12 +84,12 @@ def test_search_translates_hits_and_filter() -> None:
 
 def test_search_no_filter_when_none() -> None:
     client = _make_client()
-    client.search.return_value = []
+    client.query_points.return_value = MagicMock(points=[])
     store = QdrantVectorStore(client=client)
 
     store.search("shared", [0.1] * 1536, limit=3)
 
-    assert client.search.call_args.kwargs["query_filter"] is None
+    assert client.query_points.call_args.kwargs["query_filter"] is None
 
 
 def test_scroll_translates_points() -> None:

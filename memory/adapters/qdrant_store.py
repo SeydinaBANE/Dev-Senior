@@ -66,15 +66,18 @@ class QdrantVectorStore(VectorStore):
         score_threshold: float | None = None,
         query_filter: PayloadFilter | None = None,
     ) -> list[VectorHit]:
-        results = self._client.search(  # type: ignore[attr-defined]
+        response = self._client.query_points(
             collection_name=name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=limit,
             score_threshold=score_threshold,
             query_filter=_to_filter(query_filter),
             with_payload=True,
         )
-        return [VectorHit(id=_to_id(r.id), payload=r.payload or {}, score=r.score) for r in results]
+        return [
+            VectorHit(id=_to_id(r.id), payload=r.payload or {}, score=r.score)
+            for r in response.points
+        ]
 
     def scroll(self, name: str, *, filter: PayloadFilter, limit: int) -> list[VectorHit]:
         points, _ = self._client.scroll(
