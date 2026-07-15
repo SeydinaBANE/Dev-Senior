@@ -320,8 +320,11 @@ make serve-prod             # FastAPI sert /app + API sur :8080
 ```
 Dev-Senior/
 ├── agents/
-│   ├── dev_senior/         ← agent.py, prompts.py, __main__.py
-│   ├── biz_manager/        ← agent.py, prompts.py, __main__.py
+│   ├── ports.py            ← AgentPort (Protocol satisfait par pydantic_ai.Agent)
+│   ├── adapters/           ← dev_senior_agent.py, biz_manager_agent.py : build_agent() -> AgentPort
+│   ├── registry.py         ← AgentRegistry, attaché à app.state.agents (lifespan FastAPI)
+│   ├── dev_senior/         ← agent.py (singleton de compat CLI), prompts.py, __main__.py
+│   ├── biz_manager/        ← agent.py (singleton de compat CLI), prompts.py, __main__.py
 │   └── config.py           ← OpenRouter model factory
 ├── mcp_servers/
 │   ├── github/             ← list_prs, get_pr_diff, read_file, create_issue…
@@ -342,11 +345,13 @@ Dev-Senior/
 │       ├── slack.py        ← POST /slack/command (slash commands)
 │       └── teams.py        ← POST /teams/message (outgoing webhook)
 ├── memory/
+│   ├── ports.py            ← VectorStore (ABC) — port mémoire vectorielle
+│   ├── adapters/           ← qdrant_store.py : QdrantVectorStore(VectorStore)
 │   ├── embeddings.py       ← OpenRouter text-embedding-3-small
-│   ├── store.py            ← client Qdrant partagé
-│   ├── dev_senior/         ← indexer.py + retriever.py (RAG codebase)
-│   ├── biz_manager/        ← context.py (mémoire interactions)
-│   └── shared/             ← memory.py (contexte cross-agent, collection "shared")
+│   ├── store.py            ← client Qdrant partagé (utilisé uniquement par adapters/qdrant_store.py)
+│   ├── dev_senior/         ← indexer.py + retriever.py (CodebaseRepository — RAG codebase)
+│   ├── biz_manager/        ← context.py (BizContextRepository — mémoire interactions)
+│   └── shared/             ← memory.py (SharedMemoryRepository — contexte cross-agent, collection "shared")
 ├── observability/
 │   ├── langfuse_config.py  ← traces + scores LLM-as-judge
 │   └── evals/
@@ -372,11 +377,12 @@ Dev-Senior/
 │   ├── docker/             ← Dockerfile (multi-stage), docker-compose (Qdrant + PostgreSQL + Redis + n8n + agents-api)
 │   └── deploy/             ← start/stop/healthcheck + launchd (eval cron)
 ├── tests/
-│   ├── agents/             ← test_smoke.py (TestModel, sans appel réseau)
+│   ├── conftest.py         ← pré-import des modules memory/* stubés ailleurs (évite la pollution sys.modules)
+│   ├── agents/             ← test_smoke.py (TestModel, sans appel réseau), test_registry.py (AgentRegistry)
 │   ├── mcp_servers/        ← test_github.py, test_crm.py, test_seo.py, test_google_workspace.py
-│   ├── memory/             ← test_shared.py
-│   ├── observability/      ← test_evals.py
-│   └── api/                ← test_sessions.py, test_slack.py, test_teams.py, test_upload.py
+│   ├── memory/             ← test_shared.py, test_qdrant_store.py, test_retriever.py, test_context.py, test_indexer.py
+│   ├── observability/      ← test_cron_eval.py
+│   └── api/                ← test_sessions.py, test_slack.py, test_teams.py, test_streaming.py, test_upload.py, test_biz_manager_task.py
 ├── docs/
 │   ├── guide_dev_senior.md
 │   ├── guide_biz_manager.md

@@ -24,7 +24,7 @@ make check    # lint -> typecheck -> test  (sequential)
 ```
 
 - `make lint` = `ruff check .`
-- `make typecheck` = `mypy agents/ --ignore-missing-imports` **(only `agents/` package** — `api/`, `memory/`, `observability/` have incomplete stubs for asyncpg/qdrant-client that raise false positives in strict mode)
+- `make typecheck` = `mypy agents/ memory/ports.py memory/adapters/ --ignore-missing-imports` — `agents/`, `memory/ports.py`, `memory/adapters/` are interface-clean; the rest of `memory/`, plus `api/` and `observability/`, have incomplete stubs for asyncpg/qdrant-client that raise false positives in strict mode
 - `make test` = `pytest tests/ -v`
 
 Single test: `.venv/bin/pytest tests/api/test_slack.py::test_reset_keyword -v`
@@ -33,37 +33,32 @@ Pytest runs in `asyncio_mode = "auto"` — no `@pytest.mark.asyncio` needed.
 
 ## Test patterns (critical to know)
 
-All tests that import routes **must stub agents in `sys.modules` before any imports** to avoid initializing OpenRouter:
+Routes no longer import agent singletons directly — they read `request.app.state.agents.dev_senior` / `.biz_manager` / `.get(name)` (an `AgentRegistry`, see below). Route-level tests inject a fake registry straight into `app.state.agents` instead of patching module attributes:
 
 ```python
-# At module level, BEFORE any imports from api.routes.* or agents.*
-import sys
-from types import ModuleType
 from unittest.mock import MagicMock
 
-def _stub_agents():
-    for mod_path in ("agents.dev_senior.agent", "agents.biz_manager.agent"):
-        if mod_path not in sys.modules:
-            m = ModuleType(mod_path)
-            m.agent = MagicMock()
-            sys.modules[mod_path] = m
-
-_stub_agents()
-
-# Now safe to import routes
+app.state.agents = MagicMock()          # .get("dev-senior") returns a MagicMock agent automatically
+# or, to control a specific agent's .run()/.run_stream():
+client.app.state.agents.dev_senior = mock_agent
 ```
+
+Some routes still import `memory.*` functions (`retrieve_context`, `save_interaction`) at module level — those are stubbed in `sys.modules` before import if not already loaded, see `_stub_memory()` in `tests/api/test_streaming.py`/`test_upload.py`. `tests/conftest.py` pre-imports the real `memory.dev_senior.retriever` / `memory.biz_manager.context` / `memory.shared.memory` modules so this stubbing never shadows the real classes (`CodebaseRepository`, etc.) needed by `tests/memory/*` — don't remove that import without checking test collection order doesn't break.
 
 Streaming tests need `@asynccontextmanager` wrapping `agent.run_stream` (see `tests/api/test_streaming.py`). Upload tests use `files={"file": ("name.ext", BytesIO(content), mime)}` with `TestClient`.
 
-Smoke tests (`tests/agents/`) use Pydantic AI `TestModel` — no network calls.
+Smoke tests (`tests/agents/`) use Pydantic AI `TestModel` — no network calls. `tests/agents/test_registry.py` tests `AgentRegistry` with fake `AgentPort` doubles.
+
+New `memory/` ports/adapters/repositories are tested by injecting a fake `VectorStore` (see `tests/memory/test_qdrant_store.py`, `test_retriever.py`, `test_context.py`, `test_shared.py`, `test_indexer.py`) — no real Qdrant needed.
 
 CI sets fake env vars (`OPENROUTER_API_KEY: test-key-ci`, etc.) — any new env required by code must be added there too.
 
 ## Pydantic AI quirks
 
-- `OpenAIModel` requires `provider=OpenAIProvider(base_url=..., api_key=...)` — do NOT pass `base_url`/`api_key` directly to the constructor (broken since pydantic-ai >= 0.0.14). See `agents/config.py::openrouter_model()`.
+- `pydantic-ai` is pinned `>=0.4,<1.0` in `pyproject.toml` — 1.x/2.x moved `OpenAIModel` and `MCPServerStdio` to different import paths, breaking `agents/config.py` and `agents/adapters/*` at mypy/import time. There's no lockfile, so CI re-resolves this range on every run — if `mypy`/tests suddenly fail with `attr-defined` errors on `pydantic_ai.*` imports, check whether the pin needs bumping to a newer *compatible* release, not removing.
+- `OpenAIModel` requires `provider=OpenAIProvider(base_url=..., api_key=...)` — do NOT pass `base_url`/`api_key` directly to the constructor. See `agents/config.py::openrouter_model()`.
 - Serialize message history with `ModelMessagesTypeAdapter.dump_python(messages, mode="json")`, not `.model_dump()`.
-- MCP servers started once via `agent.run_mcp_servers()` in the FastAPI lifespan.
+- MCP servers started once via `AgentRegistry.run_mcp_servers()` in the FastAPI lifespan (nests `dev_senior` then `biz_manager`).
 
 ## Session store
 
@@ -74,6 +69,12 @@ External integrations use session keys:
 - Teams: `teams:{conversation_id}`
 
 Keyword `reset` in any text input deletes the session.
+
+## Agent registry
+
+Duck-typed at `request.app.state.agents` — routes never import the concrete `Agent` singletons. `agents/ports.py::AgentPort` is a `Protocol` (structurally satisfied by `pydantic_ai.Agent`, not a wrapper class — one backend, no need for an adapter class). `agents/adapters/{dev_senior,biz_manager}_agent.py::build_agent()` construct the real agent (model, system prompt, MCP servers). `agents/registry.py::AgentRegistry.create()` builds both and is set on `app.state.agents` in the FastAPI lifespan; `.dev_senior` / `.biz_manager` / `.get(name)` are the three ways routes/Slack/Teams consume it.
+
+`agents/dev_senior/agent.py` and `agents/biz_manager/agent.py` still exist as thin module-level singletons (`agent = build_agent()`) — but only the CLI entrypoints (`__main__.py`, `make dev-senior`/`make biz-manager`) import them now. Don't reintroduce a direct `from agents.dev_senior.agent import agent` in `api/`.
 
 ## API quirks
 
@@ -93,9 +94,13 @@ Keyword `reset` in any text input deletes the session.
 
 ## Vector memory (Qdrant)
 
-Three collections: `codebase` (RAG, threshold 0.70, top_k=5), `biz_context` (interaction history), `shared` (cross-agent).
+Three collections: `codebase` (RAG, threshold 0.70, top_k=5), `biz_context` (threshold 0.60), `shared` (threshold 0.65, cross-agent).
+
+`memory/ports.py::VectorStore` (ABC) + `memory/adapters/qdrant_store.py::QdrantVectorStore` isolate business logic (thresholds, filters, prompt formatting) from `qdrant_client` calls — that's the only file (with `memory/store.py`, which just holds the shared client singleton) allowed to import `qdrant_client`/`qdrant_client.models`. Each collection has a repository built on the port: `CodebaseRepository` (`memory/dev_senior/retriever.py`, reused by `indexer.py`), `SharedMemoryRepository` (`memory/shared/memory.py`), `BizContextRepository` (`memory/biz_manager/context.py`). `PayloadFilter = dict[str, str]` (AND-of-equality) covers every filter used today. `BizContextRepository.retrieve()` returns `None` (not `""`) when the collection is empty — a historical quirk that short-circuits the cross-agent `retrieve_shared()` fallback; `CodebaseRepository` doesn't have this early-return, it always checks the shared fallback.
 
 `memory/vector_store/` is gitignored (local Qdrant data). Index with `make index-codebase` (incremental) or `make index-codebase-force` (full reindex).
+
+`qdrant-client>=1.9.0` has no upper bound in `pyproject.toml`; newer releases (1.1x+) removed `QdrantClient.search()` in favor of `query_points()`. Existing code (old and new) still calls `.search()` with `# type: ignore[attr-defined]` — a pre-existing latent break, not yet fixed, worth checking before relying on real Qdrant search in prod.
 
 `observability/logfire_config.py` is a deprecated compat shim — import from `langfuse_config` directly.
 
