@@ -27,10 +27,8 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
-from agents.biz_manager.agent import agent as biz_agent
-from agents.dev_senior.agent import agent as dev_agent
-
 if TYPE_CHECKING:
+    from agents.registry import AgentRegistry
     from api.sessions import SessionStore
 
 router = APIRouter(prefix="/slack", tags=["Slack"])
@@ -69,9 +67,10 @@ async def _run_agent_and_reply(
     response_url: str,
     sessions: "SessionStore",
     session_key: str,
+    agents: "AgentRegistry",
 ) -> None:
     """Appelé en background : run l'agent avec historique et poste la réponse à Slack."""
-    agent = dev_agent if agent_name == "dev-senior" else biz_agent
+    agent = agents.get(agent_name)
     history_raw = await sessions.get_history(session_key)
     history = ModelMessagesTypeAdapter.validate_python(history_raw) if history_raw else []
     try:
@@ -126,7 +125,13 @@ async def slack_command(
 
     # Ack immédiat pour respecter le délai 3s de Slack
     background_tasks.add_task(
-        _run_agent_and_reply, agent_name, text, response_url, sessions, session_key
+        _run_agent_and_reply,
+        agent_name,
+        text,
+        response_url,
+        sessions,
+        session_key,
+        request.app.state.agents,
     )
 
     return {

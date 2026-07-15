@@ -3,30 +3,13 @@
 import base64
 import hashlib
 import hmac
-import sys
-from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-def _stub_agents() -> None:
-    """Injecte des agents factices dans sys.modules pour éviter l'init OpenRouter."""
-    for mod_path in (
-        "agents.dev_senior.agent",
-        "agents.biz_manager.agent",
-    ):
-        if mod_path not in sys.modules:
-            m = ModuleType(mod_path)
-            m.agent = MagicMock()  # type: ignore[attr-defined]
-            sys.modules[mod_path] = m
-
-
-_stub_agents()
-
-import pytest  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from api.routes.teams import _parse_agent_and_text, router  # noqa: E402
+from api.routes.teams import _parse_agent_and_text, router
 
 
 def _make_sessions() -> MagicMock:
@@ -42,6 +25,7 @@ def client() -> TestClient:
     app = FastAPI()
     app.include_router(router)
     app.state.sessions = _make_sessions()
+    app.state.agents = MagicMock()
     return TestClient(app)
 
 
@@ -114,17 +98,19 @@ def test_message_routes_to_dev_senior(client: TestClient) -> None:
     mock_result.data = "Réponse Dev Senior"
     mock_result.all_messages = MagicMock(return_value=[])
 
+    mock_agent = MagicMock()
+    mock_agent.run = AsyncMock(return_value=mock_result)
+    client.app.state.agents.get.return_value = mock_agent
+
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
-        with patch("api.routes.teams.dev_agent") as mock_agent:
-            mock_agent.run = AsyncMock(return_value=mock_result)
-            r = client.post(
-                "/teams/message",
-                json={
-                    "type": "message",
-                    "text": "@dev-senior explique ce code",
-                    "conversation": {"id": "conv-1"},
-                },
-            )
+        r = client.post(
+            "/teams/message",
+            json={
+                "type": "message",
+                "text": "@dev-senior explique ce code",
+                "conversation": {"id": "conv-1"},
+            },
+        )
 
     assert r.status_code == 200
     assert r.json()["text"] == "Réponse Dev Senior"
@@ -136,17 +122,19 @@ def test_message_routes_to_biz_manager(client: TestClient) -> None:
     mock_result.data = "Réponse Biz Manager"
     mock_result.all_messages = MagicMock(return_value=[])
 
+    mock_agent = MagicMock()
+    mock_agent.run = AsyncMock(return_value=mock_result)
+    client.app.state.agents.get.return_value = mock_agent
+
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
-        with patch("api.routes.teams.biz_agent") as mock_agent:
-            mock_agent.run = AsyncMock(return_value=mock_result)
-            r = client.post(
-                "/teams/message",
-                json={
-                    "type": "message",
-                    "text": "@biz-manager analyse ce lead",
-                    "conversation": {"id": "conv-2"},
-                },
-            )
+        r = client.post(
+            "/teams/message",
+            json={
+                "type": "message",
+                "text": "@biz-manager analyse ce lead",
+                "conversation": {"id": "conv-2"},
+            },
+        )
 
     assert r.status_code == 200
     assert r.json()["text"] == "Réponse Biz Manager"
@@ -157,13 +145,15 @@ def test_message_saves_session_history(client: TestClient) -> None:
     mock_result.data = "Réponse."
     mock_result.all_messages = MagicMock(return_value=[])
 
+    mock_agent = MagicMock()
+    mock_agent.run = AsyncMock(return_value=mock_result)
+    client.app.state.agents.get.return_value = mock_agent
+
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
-        with patch("api.routes.teams.dev_agent") as mock_agent:
-            mock_agent.run = AsyncMock(return_value=mock_result)
-            client.post(
-                "/teams/message",
-                json={"type": "message", "text": "question", "conversation": {"id": "conv-42"}},
-            )
+        client.post(
+            "/teams/message",
+            json={"type": "message", "text": "question", "conversation": {"id": "conv-42"}},
+        )
 
     client.app.state.sessions.set_history.assert_awaited_once()
     call_args = client.app.state.sessions.set_history.call_args[0]
@@ -202,13 +192,15 @@ def test_message_missing_auth_rejected(client: TestClient) -> None:
 
 
 def test_message_agent_error_returns_message(client: TestClient) -> None:
+    mock_agent = MagicMock()
+    mock_agent.run = AsyncMock(side_effect=RuntimeError("oops"))
+    client.app.state.agents.get.return_value = mock_agent
+
     with patch("api.routes.teams._WEBHOOK_KEY", ""):
-        with patch("api.routes.teams.dev_agent") as mock_agent:
-            mock_agent.run = AsyncMock(side_effect=RuntimeError("oops"))
-            r = client.post(
-                "/teams/message",
-                json={"type": "message", "text": "question", "conversation": {"id": "conv-err"}},
-            )
+        r = client.post(
+            "/teams/message",
+            json={"type": "message", "text": "question", "conversation": {"id": "conv-err"}},
+        )
 
     assert r.status_code == 200
     assert "oops" in r.json()["text"]

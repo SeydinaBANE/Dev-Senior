@@ -6,7 +6,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
-from agents.biz_manager.agent import agent
 from api.auth import require_api_key
 from api.file_extractor import extract_text
 from api.sessions import SessionStore
@@ -68,6 +67,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     """Envoie un message à l'agent Business Manager et retourne sa réponse."""
+    agent = request.app.state.agents.biz_manager
     sessions: SessionStore = request.app.state.sessions
     session_id = req.session_id or await sessions.new_session("biz-manager")
     history_raw = await sessions.get_history(session_id)
@@ -107,6 +107,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 @router.post("/chat/stream", dependencies=[Depends(require_api_key)])
 async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     """SSE : stream token-par-token la réponse de l'agent Business Manager."""
+    agent = request.app.state.agents.biz_manager
     sessions: SessionStore = request.app.state.sessions
     session_id = req.session_id or await sessions.new_session("biz-manager")
     history_raw = await sessions.get_history(session_id)
@@ -156,8 +157,9 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
 
 
 @router.post("/task", response_model=TaskResponse, dependencies=[Depends(require_api_key)])
-async def run_task(req: TaskRequest) -> TaskResponse:
+async def run_task(req: TaskRequest, request: Request) -> TaskResponse:
     """Exécution one-shot pour les workflows n8n (sans historique de session)."""
+    agent = request.app.state.agents.biz_manager
     lf = get_langfuse()
     trace = (
         lf.trace(

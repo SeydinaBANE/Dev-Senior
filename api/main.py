@@ -26,8 +26,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from agents.biz_manager.agent import agent as biz_agent
-from agents.dev_senior.agent import agent as dev_agent
+from agents.registry import AgentRegistry
 from api.metrics_store import record_request
 from api.routes.biz_manager import router as biz_router
 from api.routes.dev_senior import router as dev_router
@@ -43,9 +42,9 @@ from observability.langfuse_config import flush as langfuse_flush
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     configure_observability("agents-api")
     app.state.sessions = await SessionStore.create()
-    async with dev_agent.run_mcp_servers():
-        async with biz_agent.run_mcp_servers():
-            yield
+    app.state.agents = AgentRegistry.create()
+    async with app.state.agents.run_mcp_servers():
+        yield
     await app.state.sessions.close()
     langfuse_flush()
 

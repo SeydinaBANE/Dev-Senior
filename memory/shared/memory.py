@@ -12,13 +12,96 @@ API publique :
 import uuid
 from datetime import UTC, datetime
 
-from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
-
+from memory.adapters.qdrant_store import QdrantVectorStore
 from memory.embeddings import embed
-from memory.store import ensure_collection, get_client
+from memory.ports import PayloadFilter, VectorPoint, VectorStore
 
 COLLECTION_NAME = "shared"
-MIN_SCORE = 0.65
+
+
+class SharedMemoryRepository:
+    """Logique métier de la mémoire partagée, indépendante du backend vectoriel."""
+
+    MIN_SCORE = 0.65
+
+    def __init__(self, store: VectorStore | None = None) -> None:
+        self._store = store or QdrantVectorStore()
+
+    def save(
+        self,
+        content: str,
+        source_agent: str,
+        category: str = "general",
+        tags: str = "",
+    ) -> str:
+        """Sauvegarde une information dans la mémoire partagée.
+
+        Returns:
+            ID UUID du point créé.
+        """
+        self._store.ensure_collection(COLLECTION_NAME)
+        note_id = str(uuid.uuid4())
+        self._store.upsert(
+            COLLECTION_NAME,
+            [
+                VectorPoint(
+                    id=note_id,
+                    vector=embed(content),
+                    payload={
+                        "source_agent": source_agent,
+                        "category": category,
+                        "tags": tags,
+                        "created_at": datetime.now(UTC).isoformat(),
+                        "text": content,
+                    },
+                )
+            ],
+        )
+        return note_id
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 3,
+        source_agent: str | None = None,
+    ) -> str:
+        """Retrouve les informations partagées pertinentes pour une requête.
+
+        Returns:
+            Contexte formaté prêt à être injecté dans un prompt, ou "" si vide.
+        """
+        self._store.ensure_collection(COLLECTION_NAME)
+        if self._store.count(COLLECTION_NAME) == 0:
+            return ""
+
+        query_filter: PayloadFilter | None = (
+            {"source_agent": source_agent} if source_agent else None
+        )
+
+        results = self._store.search(
+            COLLECTION_NAME,
+            embed(query),
+            limit=top_k,
+            score_threshold=self.MIN_SCORE,
+            query_filter=query_filter,
+        )
+
+        if not results:
+            return ""
+
+        parts = ["--- Contexte partagé ---"]
+        for hit in results:
+            agent = hit.payload.get("source_agent", "")
+            cat = hit.payload.get("category", "")
+            date = hit.payload.get("created_at", "")[:10]
+            text = hit.payload.get("text", "")
+            parts.append(f"\n[{agent} • {cat} • {date}]\n{text}")
+        parts.append("--- Fin du contexte partagé ---")
+
+        return "\n".join(parts)
+
+
+_repo = SharedMemoryRepository()
 
 
 def save_shared(
@@ -38,25 +121,7 @@ def save_shared(
     Returns:
         ID UUID du point créé.
     """
-    ensure_collection(COLLECTION_NAME)
-    note_id = str(uuid.uuid4())
-    get_client().upsert(
-        collection_name=COLLECTION_NAME,
-        points=[
-            PointStruct(
-                id=note_id,
-                vector=embed(content),
-                payload={
-                    "source_agent": source_agent,
-                    "category": category,
-                    "tags": tags,
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "text": content,
-                },
-            )
-        ],
-    )
-    return note_id
+    return _repo.save(content, source_agent, category, tags)
 
 
 def retrieve_shared(
@@ -74,36 +139,4 @@ def retrieve_shared(
     Returns:
         Contexte formaté prêt à être injecté dans un prompt, ou "" si vide.
     """
-    ensure_collection(COLLECTION_NAME)
-    client = get_client()
-    if client.get_collection(COLLECTION_NAME).points_count == 0:
-        return ""
-
-    query_filter = None
-    if source_agent:
-        query_filter = Filter(
-            must=[FieldCondition(key="source_agent", match=MatchValue(value=source_agent))]
-        )
-
-    results = client.search(  # type: ignore[attr-defined]
-        collection_name=COLLECTION_NAME,
-        query_vector=embed(query),
-        limit=top_k,
-        score_threshold=MIN_SCORE,
-        query_filter=query_filter,
-        with_payload=True,
-    )
-
-    if not results:
-        return ""
-
-    parts = ["--- Contexte partagé ---"]
-    for hit in results:
-        agent = hit.payload.get("source_agent", "")
-        cat = hit.payload.get("category", "")
-        date = hit.payload.get("created_at", "")[:10]
-        text = hit.payload.get("text", "")
-        parts.append(f"\n[{agent} • {cat} • {date}]\n{text}")
-    parts.append("--- Fin du contexte partagé ---")
-
-    return "\n".join(parts)
+    return _repo.retrieve(query, top_k, source_agent)

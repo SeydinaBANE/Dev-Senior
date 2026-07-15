@@ -135,7 +135,7 @@ format:
 	$(RUFF) check --fix .
 
 typecheck:
-	$(MYPY) agents/ --ignore-missing-imports
+	$(MYPY) agents/ memory/ports.py memory/adapters/ --ignore-missing-imports
 
 check: lint typecheck test
 	@echo "✓ Tout est propre."

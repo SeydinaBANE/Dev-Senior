@@ -3,20 +3,12 @@
 import json
 import sys
 from contextlib import asynccontextmanager
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-
-def _stub_agents() -> None:
-    for mod_path in ("agents.dev_senior.agent", "agents.biz_manager.agent"):
-        if mod_path not in sys.modules:
-            m = ModuleType(mod_path)
-            m.agent = MagicMock()  # type: ignore[attr-defined]
-            sys.modules[mod_path] = m
 
 
 def _stub_memory() -> None:
@@ -27,11 +19,10 @@ def _stub_memory() -> None:
     ):
         if mod_path not in sys.modules:
             m = ModuleType(mod_path)
+            setattr(m, attr, MagicMock(return_value=""))
             sys.modules[mod_path] = m
-        setattr(sys.modules[mod_path], attr, MagicMock(return_value=""))
 
 
-_stub_agents()
 _stub_memory()
 
 from api.auth import require_api_key  # noqa: E402
@@ -51,6 +42,7 @@ def _make_app() -> FastAPI:
     mock_sessions.get_history = AsyncMock(return_value=[])
     mock_sessions.set_history = AsyncMock()
     app.state.sessions = mock_sessions
+    app.state.agents = SimpleNamespace(dev_senior=MagicMock(), biz_manager=MagicMock())
     return app
 
 
@@ -102,12 +94,12 @@ def _parse_sse(raw: str) -> list[dict]:
 
 def test_dev_senior_stream_sends_session_first(client: TestClient) -> None:
     mock_agent = _mock_stream_agent(["Hello", " World"])
-    with patch("api.routes.dev_senior.agent", mock_agent):
-        with patch("api.routes.dev_senior.retrieve_context", return_value=""):
-            r = client.post(
-                "/dev-senior/chat/stream",
-                json={"message": "test", "session_id": ""},
-            )
+    client.app.state.agents.dev_senior = mock_agent
+    with patch("api.routes.dev_senior.retrieve_context", return_value=""):
+        r = client.post(
+            "/dev-senior/chat/stream",
+            json={"message": "test", "session_id": ""},
+        )
     assert r.status_code == 200
     events = _parse_sse(r.text)
     assert events[0]["event"] == "session"
@@ -116,12 +108,12 @@ def test_dev_senior_stream_sends_session_first(client: TestClient) -> None:
 
 def test_dev_senior_stream_yields_chunks(client: TestClient) -> None:
     mock_agent = _mock_stream_agent(["Bon", "jour"])
-    with patch("api.routes.dev_senior.agent", mock_agent):
-        with patch("api.routes.dev_senior.retrieve_context", return_value=""):
-            r = client.post(
-                "/dev-senior/chat/stream",
-                json={"message": "test", "session_id": ""},
-            )
+    client.app.state.agents.dev_senior = mock_agent
+    with patch("api.routes.dev_senior.retrieve_context", return_value=""):
+        r = client.post(
+            "/dev-senior/chat/stream",
+            json={"message": "test", "session_id": ""},
+        )
     events = _parse_sse(r.text)
     chunks = [
         json.loads(e["data"]) for e in events if e.get("event") is None and e["data"] != "[DONE]"
@@ -131,12 +123,12 @@ def test_dev_senior_stream_yields_chunks(client: TestClient) -> None:
 
 def test_dev_senior_stream_ends_with_done(client: TestClient) -> None:
     mock_agent = _mock_stream_agent(["ok"])
-    with patch("api.routes.dev_senior.agent", mock_agent):
-        with patch("api.routes.dev_senior.retrieve_context", return_value=""):
-            r = client.post(
-                "/dev-senior/chat/stream",
-                json={"message": "test", "session_id": ""},
-            )
+    client.app.state.agents.dev_senior = mock_agent
+    with patch("api.routes.dev_senior.retrieve_context", return_value=""):
+        r = client.post(
+            "/dev-senior/chat/stream",
+            json={"message": "test", "session_id": ""},
+        )
     events = _parse_sse(r.text)
     last = events[-1]
     assert last.get("event") is None
@@ -151,13 +143,13 @@ def test_dev_senior_stream_error_yields_error_event(client: TestClient) -> None:
 
     mock_agent = MagicMock()
     mock_agent.run_stream = _failing_stream
+    client.app.state.agents.dev_senior = mock_agent
 
-    with patch("api.routes.dev_senior.agent", mock_agent):
-        with patch("api.routes.dev_senior.retrieve_context", return_value=""):
-            r = client.post(
-                "/dev-senior/chat/stream",
-                json={"message": "test", "session_id": ""},
-            )
+    with patch("api.routes.dev_senior.retrieve_context", return_value=""):
+        r = client.post(
+            "/dev-senior/chat/stream",
+            json={"message": "test", "session_id": ""},
+        )
     assert r.status_code == 200
     events = _parse_sse(r.text)
     error_events = [e for e in events if e.get("event") == "error"]
@@ -167,12 +159,12 @@ def test_dev_senior_stream_error_yields_error_event(client: TestClient) -> None:
 
 def test_dev_senior_stream_content_type(client: TestClient) -> None:
     mock_agent = _mock_stream_agent([])
-    with patch("api.routes.dev_senior.agent", mock_agent):
-        with patch("api.routes.dev_senior.retrieve_context", return_value=""):
-            r = client.post(
-                "/dev-senior/chat/stream",
-                json={"message": "test", "session_id": ""},
-            )
+    client.app.state.agents.dev_senior = mock_agent
+    with patch("api.routes.dev_senior.retrieve_context", return_value=""):
+        r = client.post(
+            "/dev-senior/chat/stream",
+            json={"message": "test", "session_id": ""},
+        )
     assert "text/event-stream" in r.headers["content-type"]
 
 
@@ -181,13 +173,13 @@ def test_dev_senior_stream_content_type(client: TestClient) -> None:
 
 def test_biz_manager_stream_yields_chunks(client: TestClient) -> None:
     mock_agent = _mock_stream_agent(["Super", " idée"])
-    with patch("api.routes.biz_manager.agent", mock_agent):
-        with patch("api.routes.biz_manager.retrieve_context", return_value=""):
-            with patch("api.routes.biz_manager.save_interaction"):
-                r = client.post(
-                    "/biz-manager/chat/stream",
-                    json={"message": "test", "session_id": ""},
-                )
+    client.app.state.agents.biz_manager = mock_agent
+    with patch("api.routes.biz_manager.retrieve_context", return_value=""):
+        with patch("api.routes.biz_manager.save_interaction"):
+            r = client.post(
+                "/biz-manager/chat/stream",
+                json={"message": "test", "session_id": ""},
+            )
     events = _parse_sse(r.text)
     chunks = [
         json.loads(e["data"]) for e in events if e.get("event") is None and e["data"] != "[DONE]"
@@ -197,11 +189,11 @@ def test_biz_manager_stream_yields_chunks(client: TestClient) -> None:
 
 def test_biz_manager_stream_calls_save_interaction(client: TestClient) -> None:
     mock_agent = _mock_stream_agent(["Réponse"])
-    with patch("api.routes.biz_manager.agent", mock_agent):
-        with patch("api.routes.biz_manager.retrieve_context", return_value=""):
-            with patch("api.routes.biz_manager.save_interaction") as mock_save:
-                client.post(
-                    "/biz-manager/chat/stream",
-                    json={"message": "ma question", "session_id": ""},
-                )
+    client.app.state.agents.biz_manager = mock_agent
+    with patch("api.routes.biz_manager.retrieve_context", return_value=""):
+        with patch("api.routes.biz_manager.save_interaction") as mock_save:
+            client.post(
+                "/biz-manager/chat/stream",
+                json={"message": "ma question", "session_id": ""},
+            )
     mock_save.assert_called_once_with("ma question", "Réponse")

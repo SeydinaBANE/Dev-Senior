@@ -6,14 +6,6 @@ from types import ModuleType
 from unittest.mock import MagicMock
 
 
-def _stub_agents() -> None:
-    for mod_path in ("agents.dev_senior.agent", "agents.biz_manager.agent"):
-        if mod_path not in sys.modules:
-            m = ModuleType(mod_path)
-            m.agent = MagicMock()  # type: ignore[attr-defined]
-            sys.modules[mod_path] = m
-
-
 def _stub_memory() -> None:
     for mod_path, attr in (
         ("memory.dev_senior.retriever", "retrieve_context"),
@@ -22,11 +14,10 @@ def _stub_memory() -> None:
     ):
         if mod_path not in sys.modules:
             m = ModuleType(mod_path)
+            setattr(m, attr, MagicMock(return_value=""))
             sys.modules[mod_path] = m
-        setattr(sys.modules[mod_path], attr, MagicMock(return_value=""))
 
 
-_stub_agents()
 _stub_memory()
 
 import pytest  # noqa: E402
@@ -44,6 +35,7 @@ def client() -> TestClient:
     app.include_router(dev_router)
     app.include_router(biz_router)
     app.dependency_overrides[require_api_key] = lambda: None
+    app.state.agents = MagicMock()
     return TestClient(app)
 
 

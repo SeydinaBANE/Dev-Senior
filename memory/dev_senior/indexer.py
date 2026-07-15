@@ -10,23 +10,15 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import typer
-from qdrant_client.models import (
-    FieldCondition,
-    Filter,
-    FilterSelector,
-    MatchValue,
-    PointStruct,
-)
 from rich.console import Console
 from rich.progress import track
 
+from memory.dev_senior.retriever import CodebaseRepository
 from memory.embeddings import chunk_text, embed_batch
-from memory.store import ensure_collection, get_client
+from memory.ports import VectorPoint
 
 app = typer.Typer()
 console = Console()
-
-COLLECTION_NAME = "codebase"
 
 SUPPORTED_EXTENSIONS = {
     ".py",
@@ -85,10 +77,6 @@ def _stable_id(rel_path: str, chunk_index: int) -> int:
     return int(hashlib.md5(key.encode()).hexdigest(), 16) % (2**63)
 
 
-def _source_filter(rel_path: str) -> Filter:
-    return Filter(must=[FieldCondition(key="source", match=MatchValue(value=rel_path))])
-
-
 @app.command()
 def index(
     path: str = typer.Argument(".", help="Chemin du dépôt à indexer"),
@@ -100,8 +88,8 @@ def index(
         console.print(f"[red]Chemin introuvable : {root}[/]")
         raise typer.Exit(1)
 
-    ensure_collection(COLLECTION_NAME)
-    client = get_client()
+    repo = CodebaseRepository()
+    repo.ensure()
     files = list(iter_files(root))
     console.print(f"[green]{len(files)} fichiers trouvés dans {root}[/]")
 
@@ -118,30 +106,18 @@ def index(
             content_hash = file_hash(content)
 
             if not force:
-                existing, _ = client.scroll(
-                    collection_name=COLLECTION_NAME,
-                    scroll_filter=_source_filter(rel_path),
-                    limit=1,
-                    with_payload=True,
-                )
-                if (
-                    existing
-                    and existing[0].payload
-                    and existing[0].payload.get("hash") == content_hash
-                ):
+                existing_hash = repo.existing_hash(rel_path)
+                if existing_hash == content_hash:
                     skipped += 1
                     continue
                 # Supprime l'ancienne version avant réindexation
-                if existing:
-                    client.delete(
-                        collection_name=COLLECTION_NAME,
-                        points_selector=FilterSelector(filter=_source_filter(rel_path)),
-                    )
+                if existing_hash is not None:
+                    repo.delete_file(rel_path)
 
             chunks = chunk_text(content)
             embeddings = embed_batch(chunks)
             points = [
-                PointStruct(
+                VectorPoint(
                     id=_stable_id(rel_path, i),
                     vector=emb,
                     payload={
@@ -154,7 +130,7 @@ def index(
                 )
                 for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
             ]
-            client.upsert(collection_name=COLLECTION_NAME, points=points)
+            repo.upsert_chunks(points)
             indexed += 1
 
         except Exception as e:

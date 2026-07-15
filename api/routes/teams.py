@@ -27,9 +27,6 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessagesTypeAdapter
 
-from agents.biz_manager.agent import agent as biz_agent
-from agents.dev_senior.agent import agent as dev_agent
-
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
 _WEBHOOK_KEY = os.getenv("TEAMS_WEBHOOK_KEY", "")
@@ -88,7 +85,7 @@ async def teams_message(request: Request, msg: TeamsMessage) -> dict:
         return {"type": "message", "text": "Message vide — rien à traiter."}
 
     agent_name, text = _parse_agent_and_text(msg.text)
-    agent = dev_agent if agent_name == "dev-senior" else biz_agent
+    agent = request.app.state.agents.get(agent_name)
 
     conversation_id = msg.conversation.get("id", "unknown")
     session_key = f"teams:{conversation_id}"

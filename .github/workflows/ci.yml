@@ -28,7 +28,7 @@ jobs:
         run: ruff format --check .
 
       - name: Types (mypy)
-        run: mypy agents/ --ignore-missing-imports
+        run: mypy agents/ memory/ports.py memory/adapters/ --ignore-missing-imports
 
   tests:
     name: Tests

@@ -19,8 +19,11 @@ Les deux agents partagent une collection Qdrant `shared` pour les contextes cros
 
 ```
 agents/
-  dev_senior/    ← agent.py, prompts.py, __main__.py
-  biz_manager/   ← agent.py, prompts.py, __main__.py
+  ports.py       ← port AgentPort (Protocol structurellement satisfait par pydantic_ai.Agent) — architecture hexagonale
+  adapters/      ← dev_senior_agent.py, biz_manager_agent.py : build_agent() -> AgentPort (construction Agent + MCP servers)
+  registry.py    ← AgentRegistry (attaché à app.state.agents dans le lifespan FastAPI, même pattern que app.state.sessions)
+  dev_senior/    ← agent.py (singleton de compat pour le CLI __main__.py), prompts.py, __main__.py
+  biz_manager/   ← agent.py (singleton de compat pour le CLI __main__.py), prompts.py, __main__.py
   config.py      ← openrouter_model(), dev_senior_model(), biz_manager_model()
 
 mcp_servers/
@@ -44,11 +47,13 @@ api/
     teams.py        ← POST /teams/message (outgoing webhook, routage par @mention) — sessions par conversation (teams:{conversation_id}), mot-clé "reset"
 
 memory/
+  ports.py       ← port VectorStore (ABC) + VectorPoint/VectorHit/PayloadFilter — architecture hexagonale
+  adapters/      ← qdrant_store.py : QdrantVectorStore(VectorStore), seul fichier (avec store.py) à importer qdrant_client
   embeddings.py  ← génération embeddings via OpenRouter
-  store.py       ← client Qdrant partagé (singleton)
-  dev_senior/    ← indexer.py, retriever.py (RAG codebase, collection "codebase" ; score_threshold=0.70, top_k=5)
-  biz_manager/   ← context.py (mémoire interactions, collection "biz_context")
-  shared/        ← memory.py (save_shared, retrieve_shared, collection "shared")
+  store.py       ← client Qdrant partagé (singleton), utilisé uniquement par adapters/qdrant_store.py
+  dev_senior/    ← indexer.py, retriever.py (CodebaseRepository — RAG codebase, collection "codebase" ; score_threshold=0.70, top_k=5)
+  biz_manager/   ← context.py (BizContextRepository — mémoire interactions, collection "biz_context")
+  shared/        ← memory.py (SharedMemoryRepository — save_shared, retrieve_shared, collection "shared")
   vector_store/  ← données Qdrant locales (ne pas committer)
 
 observability/
@@ -148,7 +153,7 @@ make test-mcp           # pytest tests/mcp_servers/
 - Python 3.11+, type hints stricts, `mypy --strict`
 - Pydantic AI pour les agents : `Agent(model=..., system_prompt=..., mcp_servers=[...])`
 - `OpenAIModel` exige désormais `provider=OpenAIProvider(base_url=..., api_key=...)` — ne plus passer `base_url`/`api_key` directement au constructeur (cassé depuis pydantic-ai ≥ 0.0.14). Voir `agents/config.py::openrouter_model()`
-- `mypy` en CI ne couvre que `agents/` — les autres packages (`api/`, `memory/`, `observability/`) ont des stubs incomplets pour asyncpg/qdrant-client qui génèrent des faux positifs en strict mode
+- `mypy` en CI couvre `agents/` ainsi que `memory/ports.py` et `memory/adapters/` (interface-clean, pas de stubs qdrant-client incomplets à ce niveau) — le reste de `memory/` et les autres packages (`api/`, `observability/`) restent hors scope strict (stubs asyncpg/qdrant-client incomplets qui génèrent des faux positifs)
 - MCP servers : `FastMCP` de `mcp.server.fastmcp`, `if __name__ == "__main__": mcp.run()`
 - Sessions : `SessionStore.create()` dans le lifespan → `app.state.sessions`. Les routes utilisent `request.app.state.sessions` (duck-typed, Redis ou PostgreSQL selon `REDIS_URL`)
 - Sérialisation Pydantic AI : `ModelMessagesTypeAdapter.dump_python(..., mode="json")` pour JSON
@@ -204,8 +209,10 @@ make test-mcp           # pytest tests/mcp_servers/
 - **Pydantic AI** : type-safe, multi-provider, s'intègre nativement avec Langfuse via traces manuelles
 - **OpenRouter** : une seule clé pour tous les modèles (Qwen, Llama, embeddings)
 - **Qdrant** : base vectorielle prod-ready avec dashboard HTTP (`http://localhost:6333/dashboard`). 3 collections : `codebase` (RAG Dev Senior), `biz_context` (mémoire Biz Manager), `shared` (cross-agent)
+- **VectorStore (ABC)** — architecture hexagonale : `memory/ports.py::VectorStore` isole la logique métier (seuils de score, filtres, formatage de contexte) de `qdrant_client`, confiné à l'unique adapter `memory/adapters/qdrant_store.py::QdrantVectorStore`. Chaque collection a un repository dédié construit par-dessus le port : `CodebaseRepository` (`memory/dev_senior/retriever.py`, réutilisé par `indexer.py`), `SharedMemoryRepository` (`memory/shared/memory.py`), `BizContextRepository` (`memory/biz_manager/context.py`). Les wrappers `retrieve_context`/`save_shared`/`retrieve_shared`/`save_note`/`save_interaction` gardent leurs signatures historiques. `PayloadFilter = dict[str, str]` (égalité ANDée) couvre tous les filtres actuels. `BizContextRepository.retrieve()` retourne `None` (pas `""`) si la collection est vide — comportement historique : ça court-circuite le fallback mémoire partagée dans `retrieve_context()`, contrairement à `CodebaseRepository` qui vérifie toujours le fallback partagé
 - **SessionStore (ABC)** : factory `SessionStore.create()` sélectionne Redis si `REDIS_URL` est défini, sinon PostgreSQL. Zéro changement côté routes. `RedisSessionStore` utilise des hashes Redis avec `EXPIRE` natif ; `PostgresSessionStore` wrape asyncpg avec cleanup TTL manuel. `set_history` utilise un UPSERT (`INSERT ... ON CONFLICT DO UPDATE`) pour créer les sessions externes (Slack/Teams) au premier appel sans passer par `new_session`
-- **MCPServerStdio** : MCP servers démarrés une fois au lancement via `agent.run_mcp_servers()`
+- **AgentPort (Protocol) + AgentRegistry** — architecture hexagonale : `agents/ports.py::AgentPort` est un `Protocol` structurellement satisfait par `pydantic_ai.Agent` (un seul backend, pas de classe wrapper). `agents/adapters/{dev_senior,biz_manager}_agent.py::build_agent()` construisent l'agent réel (model + system prompt + MCP servers). `agents/registry.py::AgentRegistry` remplace les anciens singletons module-level `dev_agent`/`biz_agent` : construit dans le lifespan (`AgentRegistry.create()`) et attaché à `app.state.agents` (même pattern que `app.state.sessions`). Les routes/slack/teams consomment `request.app.state.agents.dev_senior` / `.biz_manager` / `.get(name)` — plus aucun import direct du singleton dans `api/`. `agents/dev_senior/agent.py` et `agents/biz_manager/agent.py` restent des singletons de compatibilité fins (`agent = build_agent()`), utilisés uniquement par les CLI `__main__.py`
+- **MCPServerStdio** : MCP servers démarrés une fois au lancement via `AgentRegistry.run_mcp_servers()` (nesting dev_senior puis biz_manager, identique à l'ancien double `async with` imbriqué dans `api/main.py`)
 - **React + Vite** : frontend découplé, dev proxy vers l'API sur :8080, build statique pour la prod. `VITE_BASE_PATH` contrôle la base URL : `/app/` en self-hosted (FastAPI sert le SPA via `StaticFiles`), `/` sur Vercel. `VITE_API_URL` permet de pointer sur une API distante (Railway). `frontend/vercel.json` contient la règle de rewrite SPA
 - **Streaming SSE** : `POST /chat/stream` utilise `agent.run_stream(delta=True)` et retourne `StreamingResponse(media_type="text/event-stream")`. Format : `event: session` → deltas JSON-encodés → `data: [DONE]` (ou `event: error`). Le JSON-encoding des deltas évite les problèmes de caractères spéciaux dans le protocole SSE. Session et `save_interaction()` sauvegardés après le stream, pas pendant. `X-Accel-Buffering: no` désactive le buffering nginx. Les endpoints `/chat` (JSON) coexistent comme fallback pour n8n
 - **Slack** : ack immédiat (< 3s) + `BackgroundTask` pour le vrai appel agent + POST à `response_url`. Body lu brut pour HMAC avant parsing manuel du form. Session key = `slack:{channel_id}:{user_id}` — historique chargé/sauvegardé dans `_run_agent_and_reply`. Mot-clé `reset` traité de façon synchrone avant le background task.
